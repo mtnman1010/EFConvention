@@ -16,11 +16,6 @@
 //               concrete DbContext (StoreDb), domain entities, app services
 // =============================================================================
 
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using EFConventions.Data;
-
 namespace EFConventions;
 
 /// <summary>

@@ -14,7 +14,6 @@
 //   ServiceRegistration           — DI extension methods
 // =============================================================================
 
-using EFConventions.Data;               // UnitOfWork, AuditInterceptor (library)
 using EFConventions.Domain;
 using EFConventions.Sample.Services;
 using EFConventions.Services;

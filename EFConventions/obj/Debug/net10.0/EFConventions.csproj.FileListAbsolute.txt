@@ -10,3 +10,4 @@ C:\Users\mtnma\source\repos\Libraries\EFConventions\obj\Debug\net10.0\EFConventi
 C:\Users\mtnma\source\repos\Libraries\EFConventions\obj\Debug\net10.0\refint\EFConventions.dll
 C:\Users\mtnma\source\repos\Libraries\EFConventions\obj\Debug\net10.0\EFConventions.pdb
 C:\Users\mtnma\source\repos\Libraries\EFConventions\obj\Debug\net10.0\ref\EFConventions.dll
+C:\Users\mtnma\source\repos\Libraries\EFConventions\obj\Debug\net10.0\EFConventions.sourcelink.json

@@ -9,11 +9,6 @@
 // Demonstrates: optional relationship querying.
 // =============================================================================
 
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using EFConventions.Data;
 using EFConventions.Domain;
 using Microsoft.EntityFrameworkCore;
 
