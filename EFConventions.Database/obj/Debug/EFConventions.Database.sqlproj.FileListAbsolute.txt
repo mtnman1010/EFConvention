@@ -1,0 +1,6 @@
+C:\Users\mtnma\source\repos\Libraries\EFConventions.Database\bin\Debug\EFConventions.Database.dacpac
+C:\Users\mtnma\source\repos\Libraries\EFConventions.Database\bin\Debug\EFConventions.Database.dll
+C:\Users\mtnma\source\repos\Libraries\EFConventions.Database\bin\Debug\EFConventions.Database.pdb
+C:\Users\mtnma\source\repos\Libraries\EFConventions.Database\obj\Debug\EFConventions.Database.sqlproj.AssemblyReference.cache
+C:\Users\mtnma\source\repos\Libraries\EFConventions.Database\obj\Debug\EFConventions.Database.dll
+C:\Users\mtnma\source\repos\Libraries\EFConventions.Database\obj\Debug\EFConventions.Database.pdb

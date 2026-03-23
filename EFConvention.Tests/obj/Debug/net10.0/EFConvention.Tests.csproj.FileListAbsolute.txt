@@ -1,0 +1,11 @@
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\bin\Debug\net10.0\EFConvention.Tests.deps.json
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\bin\Debug\net10.0\EFConvention.Tests.dll
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\bin\Debug\net10.0\EFConvention.Tests.pdb
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\EFConvention.Tests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\EFConvention.Tests.AssemblyInfoInputs.cache
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\EFConvention.Tests.AssemblyInfo.cs
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\EFConvention.Tests.csproj.CoreCompileInputs.cache
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\EFConvention.Tests.dll
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\refint\EFConvention.Tests.dll
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\EFConvention.Tests.pdb
+C:\Users\mtnma\source\repos\Libraries\EFConvention.Tests\obj\Debug\net10.0\ref\EFConvention.Tests.dll
