@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<PackageId>EFConvention</PackageId>
+		<Version>2.1.0</Version>
+		<Authors>Jeff Willener</Authors>
+		<Description>Convention-over-configuration for EF Core. Auto-discovers entities, maps tables and columns, wires FK relationships, and optionally applies soft delete and audit stamping — without writing repetitive OnModelCreating boilerplate.</Description>
+		<PackageTags>efcore;entityframework;conventions;unitofwork;softdelete;audit</PackageTags>
+		<RepositoryUrl>https://github.com/mtnman1010/EFConvention</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<Copyright>Copyright © 2025 Jeff Willener</Copyright>
+		<PackageProjectUrl>https://github.com/mtnman1010/EFConvention</PackageProjectUrl>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
+	</ItemGroup>
+
+</Project>
