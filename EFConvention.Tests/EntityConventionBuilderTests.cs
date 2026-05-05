@@ -32,18 +32,19 @@ file sealed class TestDb : DbContext
     private readonly Action<EntityConventionBuilder> _configure;
 
     public TestDb(Action<EntityConventionBuilder> configure)
-        : base(new DbContextOptionsBuilder<TestDb>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
-            .Options)
-        => _configure = configure;
+    : base(new DbContextOptionsBuilder<TestDb>()
+        .UseInMemoryDatabase(Guid.NewGuid().ToString())
+        .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+        .EnableServiceProviderCaching(false)  // ← add this
+        .Options)
+    => _configure = configure;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var b = EntityConventionBuilder.ForAssemblyOf<Customer>();
         _configure(b);
-        b.Apply(modelBuilder);
         base.OnModelCreating(modelBuilder);
+        b.Apply(modelBuilder);
     }
 }
 

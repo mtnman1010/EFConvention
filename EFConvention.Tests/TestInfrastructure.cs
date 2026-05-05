@@ -58,6 +58,7 @@ public sealed class InMemoryStoreDb : UnitOfWork
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .ConfigureWarnings(w =>
                     w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .EnableServiceProviderCaching(false)
                 .AddInterceptors(_audit);
     }
 }
