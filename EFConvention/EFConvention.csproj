@@ -4,8 +4,11 @@
 		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<EmbedAllSources>true</EmbedAllSources>
 
-		<PackageId>EFConvention</PackageId>
+		<PackageId>EFConventionBuilder</PackageId>
 		<Version>2.1.0</Version>
 		<Authors>Jeff Willener</Authors>
 		<Description>Convention-over-configuration for EF Core. Auto-discovers entities, maps tables and columns, wires FK relationships, and optionally applies soft delete and audit stamping — without writing repetitive OnModelCreating boilerplate.</Description>
@@ -20,7 +23,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Include="..\README.md" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
 	</ItemGroup>
