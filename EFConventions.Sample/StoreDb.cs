@@ -14,14 +14,14 @@
 //   ServiceRegistration           — DI extension methods
 // =============================================================================
 
-using EFConventions.Domain;
-using EFConventions.Sample.Services;
-using EFConventions.Services;
+using EFConvention.Domain;
+using EFConvention.Sample.Services;
+using EFConvention.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EFConventions.Sample;
+namespace EFConvention.Sample;
 
 // -----------------------------------------------------------------------------
 // ICurrentUserService implementations  [APPLICATION CODE]

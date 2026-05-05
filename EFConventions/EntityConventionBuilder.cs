@@ -22,7 +22,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 
-namespace EFConventions;
+namespace EFConvention;
 
 /// <summary>
 /// Fluent facade that applies convention-over-configuration to an EF Core

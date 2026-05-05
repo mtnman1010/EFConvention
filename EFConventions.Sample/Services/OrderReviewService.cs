@@ -9,10 +9,10 @@
 // Demonstrates: optional relationship querying.
 // =============================================================================
 
-using EFConventions.Domain;
+using EFConvention.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace EFConventions.Services;
+namespace EFConvention.Services;
 
 // =============================================================================
 // IOrderService / OrderService

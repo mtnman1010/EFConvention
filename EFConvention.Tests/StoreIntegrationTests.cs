@@ -13,11 +13,10 @@
 //   AuditInterceptorTests          — interceptor stamps correct fields
 // =============================================================================
 
-using EFConventions;
-using EFConventions.Domain;
+using EFConvention.Domain;
 using EFConvention.Tests.Infrastructure;
-using EFConventions.Sample.Services;
-using EFConventions.Services;
+using EFConvention.Sample.Services;
+using EFConvention.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

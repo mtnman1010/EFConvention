@@ -1,4 +1,4 @@
-﻿namespace EFConventions
+﻿namespace EFConvention
 {
     // -----------------------------------------------------------------------------
     // Column name configuration overrides

@@ -1,7 +1,7 @@
-using EFConventions.Domain;
+using EFConvention.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace EFConventions.Sample.Services;
+namespace EFConvention.Sample.Services;
 
 public sealed class ProductService : ServiceBase<Product>, IProductService
 {

@@ -1,7 +1,7 @@
-﻿using EFConventions.Domain;
+﻿using EFConvention.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace EFConventions.Sample.Services
+namespace EFConvention.Sample.Services
 {
     // =============================================================================
     // EFConventions — Version 2.1

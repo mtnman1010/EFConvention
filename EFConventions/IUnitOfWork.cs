@@ -8,14 +8,9 @@
 // needing EF infrastructure in unit tests.
 // =============================================================================
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace EFConventions;
+namespace EFConvention;
 
 /// <summary>
 /// Abstracts the data access layer. All service objects depend on this

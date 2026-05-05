@@ -1,4 +1,4 @@
-﻿namespace EFConventions
+﻿namespace EFConvention
 {
     // -----------------------------------------------------------------------------
     // Entity identity contracts

@@ -11,8 +11,7 @@
 //   PurgeAsyncTests    — permanent removal, two-step guard
 // =============================================================================
 
-using EFConventions;
-using EFConventions.Domain;
+using EFConvention.Domain;
 using FluentAssertions;
 using Moq;
 using Xunit;

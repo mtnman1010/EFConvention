@@ -8,8 +8,8 @@
     ".NETCoreApp,Version=v10.0": {
       "EFConvention.Tests/1.0.0": {
         "dependencies": {
-          "EFConventions": "1.0.0",
-          "EFConventions.Sample": "1.0.0",
+          "EFConvention": "1.0.0",
+          "EFConvention.Sample": "1.0.0",
           "FluentAssertions": "8.4.0",
           "Microsoft.EntityFrameworkCore.InMemory": "10.0.5",
           "Microsoft.NET.Test.Sdk": "17.14.1",
@@ -916,27 +916,27 @@
           }
         }
       },
-      "EFConventions/1.0.0": {
+      "EFConvention/1.0.0": {
         "dependencies": {
           "Microsoft.EntityFrameworkCore": "10.0.5",
           "Microsoft.EntityFrameworkCore.Relational": "10.0.5"
         },
         "runtime": {
-          "EFConventions.dll": {
+          "EFConvention.dll": {
             "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
         }
       },
-      "EFConventions.Sample/1.0.0": {
+      "EFConvention.Sample/1.0.0": {
         "dependencies": {
-          "EFConventions": "1.0.0",
+          "EFConvention": "1.0.0",
           "Microsoft.AspNetCore.Http": "2.3.9",
           "Microsoft.EntityFrameworkCore": "10.0.5",
           "Microsoft.EntityFrameworkCore.SqlServer": "10.0.5"
         },
         "runtime": {
-          "EFConventions.Sample.dll": {
+          "EFConvention.Sample.dll": {
             "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
@@ -1342,12 +1342,12 @@
       "path": "xunit.extensibility.execution/2.9.3",
       "hashPath": "xunit.extensibility.execution.2.9.3.nupkg.sha512"
     },
-    "EFConventions/1.0.0": {
+    "EFConvention/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "EFConventions.Sample/1.0.0": {
+    "EFConvention.Sample/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

@@ -12,9 +12,8 @@
 // =============================================================================
 
 using System.Reflection;
-using System.Text.RegularExpressions;
 
-namespace EFConventions;
+namespace EFConvention;
 
 /// <summary>
 /// Defines the naming strategy used by <see cref="EntityConventionBuilder"/>

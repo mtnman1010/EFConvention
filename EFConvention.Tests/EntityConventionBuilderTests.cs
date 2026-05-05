@@ -15,8 +15,7 @@
 //   StartupValidationTests     — public setter error, collect-all errors
 // =============================================================================
 
-using EFConventions;
-using EFConventions.Domain;
+using EFConvention.Domain;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

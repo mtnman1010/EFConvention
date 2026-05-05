@@ -9,8 +9,7 @@
 //   StoreDbFixture       — base class that seeds a fresh database per test
 // =============================================================================
 
-using EFConventions;
-using EFConventions.Domain;
+using EFConvention.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 

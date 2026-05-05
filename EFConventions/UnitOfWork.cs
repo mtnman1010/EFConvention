@@ -9,17 +9,11 @@
 // about who the current user is.
 // =============================================================================
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
-using EFConventions;
 using Microsoft.EntityFrameworkCore;
 
-namespace EFConventions;
+namespace EFConvention;
 
 /// <summary>
 /// Abstract EF Core DbContext that implements <see cref="IUnitOfWork"/>.

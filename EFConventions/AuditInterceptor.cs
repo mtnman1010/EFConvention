@@ -15,7 +15,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
-namespace EFConventions;
+namespace EFConvention;
 
 /// <summary>
 /// EF Core <see cref="SaveChangesInterceptor"/> that stamps

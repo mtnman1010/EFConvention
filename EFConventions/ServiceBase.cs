@@ -16,7 +16,7 @@
 //               concrete DbContext (StoreDb), domain entities, app services
 // =============================================================================
 
-namespace EFConventions;
+namespace EFConvention;
 
 /// <summary>
 /// Abstract base for all application service classes. Ships as part of the

@@ -24,10 +24,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using EFConventions;
+using EFConvention;
 using Microsoft.EntityFrameworkCore;
 
-namespace EFConventions.Domain;
+namespace EFConvention.Domain;
 
 // -----------------------------------------------------------------------------
 // Address — plain entity, no audit, no soft delete

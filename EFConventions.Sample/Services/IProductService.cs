@@ -1,9 +1,6 @@
-﻿using EFConventions.Domain;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using EFConvention.Domain;
 
-namespace EFConventions.Sample.Services
+namespace EFConvention.Sample.Services
 {
     // =============================================================================
     // ProductService — IAuditable + ISoftDelete + [Precision] decimal

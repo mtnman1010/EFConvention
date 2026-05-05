@@ -1,8 +1,7 @@
-﻿using EFConventions;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 
-namespace EFConventions
+namespace EFConvention
 {
     /// <summary>
     /// Default convention. Preserves PascalCase names exactly as declared on the

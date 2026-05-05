@@ -9,7 +9,7 @@
 //                           code can reference it without a circular dependency.
 // =============================================================================
 
-namespace EFConventions;
+namespace EFConvention;
 
 // -----------------------------------------------------------------------------
 // ICurrentUserService — moved into the library in v2.1
