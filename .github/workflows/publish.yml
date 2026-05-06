@@ -13,6 +13,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.x'
+      - name: Remove Database Project
+        run: rm -rf EFConvention.Database
       - name: Restore
         run: |
           dotnet restore EFConvention/EFConvention.csproj
