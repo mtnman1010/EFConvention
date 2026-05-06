@@ -29,9 +29,9 @@
 
   <ItemGroup>
     <!-- Library under test -->
-    <ProjectReference Include="..\EFConventions\EFConvention.csproj" />
+    <ProjectReference Include="..\EFConvention\EFConvention.csproj" />
     <!-- Sample domain and services -->
-    <ProjectReference Include="..\EFConventions.Sample\EFConvention.Sample.csproj" />
+    <ProjectReference Include="..\EFConvention.Sample\EFConvention.Sample.csproj" />
   </ItemGroup>
 
 </Project>
