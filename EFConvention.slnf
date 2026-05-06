@@ -1,0 +1,10 @@
+{
+  "solution": {
+    "path": "Libraries.slnx",
+    "projects": [
+      "EFConvention\\EFConvention.csproj",
+      "EFConvention.Sample\\EFConvention.Sample.csproj",
+      "EFConvention.Tests\\EFConvention.Tests.csproj"
+    ]
+  }
+}
