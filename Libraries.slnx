@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="EFConvention.Database/EFConvention.Database.sqlproj" Id="04b53b82-c6db-41f4-b5ef-32089d71f20e">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="EFConvention.Sample/EFConvention.Sample.csproj" />
+  <Project Path="EFConvention.Tests/EFConvention.Tests.csproj" />
+  <Project Path="EFConvention/EFConvention.csproj" />
+</Solution>
