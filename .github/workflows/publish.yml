@@ -14,9 +14,15 @@ jobs:
         with:
           dotnet-version: '10.x'
       - name: Restore
-        run: dotnet restore EFConvention.slnf
+        run: |
+          dotnet restore EFConvention/EFConvention.csproj
+          dotnet restore EFConvention.Sample/EFConvention.Sample.csproj
+          dotnet restore EFConvention.Tests/EFConvention.Tests.csproj
       - name: Build
-        run: dotnet build EFConvention.slnf --configuration Release --no-restore
+        run: |
+          dotnet build EFConvention/EFConvention.csproj --configuration Release --no-restore
+          dotnet build EFConvention.Sample/EFConvention.Sample.csproj --configuration Release --no-restore
+          dotnet build EFConvention.Tests/EFConvention.Tests.csproj --configuration Release --no-restore
       - name: Test
         run: dotnet test EFConvention.Tests/EFConvention.Tests.csproj --configuration Release --no-build
       - name: Pack
