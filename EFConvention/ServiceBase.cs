@@ -1,14 +1,14 @@
 // =============================================================================
-// EFConventions — Version 2.1
-// Services/ServiceBase.cs
+// EFConvention — Version 2.2
+// ServiceBase.cs
 //
 // Moved into the library in v2.1 (was application code in v2.0).
 //
-// Now that ICurrentUserService lives in the EFConventions namespace,
-// ServiceBase can ship as part of the library. Consuming applications
-// inherit from it without writing any delete/restore/purge logic themselves.
+// Changes in v2.2:
+//   ISoftDelete property names updated:
+//     DeletedAt → DeletedDate
 //
-// Library boundary summary after v2.1:
+// Library boundary summary:
 //   Library  — ICurrentUserService, ServiceBase<TEntity>, IUnitOfWork,
 //               UnitOfWork, AuditInterceptor, EntityConventionBuilder,
 //               IEntityBase, IEntity, IAuditable, ISoftDelete

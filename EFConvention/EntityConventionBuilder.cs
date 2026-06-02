@@ -62,9 +62,17 @@ public sealed class EntityConventionBuilder
     private SoftDeleteColumnNames _softDeleteColumns = new();
     private readonly List<string> _errors = new();
 
+    private readonly IReadOnlyList<Type>? _explicitTypes;
+
     private EntityConventionBuilder(Assembly domainAssembly)
     {
         _domainAssembly = domainAssembly;
+    }
+
+    private EntityConventionBuilder(IReadOnlyList<Type> explicitTypes)
+    {
+        _domainAssembly = null!;
+        _explicitTypes = explicitTypes;
     }
 
     // -------------------------------------------------------------------------
@@ -79,6 +87,12 @@ public sealed class EntityConventionBuilder
     /// Use any domain type as the anchor.
     /// </summary>
     public static EntityConventionBuilder ForAssemblyOf<T>() => new(typeof(T).Assembly);
+
+    /// <summary>
+    /// Registers only the specified types rather than scanning an entire assembly.
+    /// Useful for testing or when you want to register a subset of entities.
+    /// </summary>
+    public static EntityConventionBuilder ForTypes(params Type[] types) => new(types);
 
     // -------------------------------------------------------------------------
     // Naming conventions
@@ -224,6 +238,7 @@ public sealed class EntityConventionBuilder
     // -------------------------------------------------------------------------
 
     private IReadOnlyList<Type> DiscoverEntityTypes() =>
+        _explicitTypes?.ToList() ??
         _domainAssembly.GetTypes()
             .Where(t => t.IsClass &&
                         !t.IsAbstract &&
@@ -490,27 +505,33 @@ public sealed class EntityConventionBuilder
                     $"{collection.DeclaringType!.Name}.{collection.Name} has a public setter. " +
                     "Collection navigation properties must use 'private set;' or no setter.");
 
-            var rel = dependent
+            dependent
                 .HasOne(principalType, refProp.Name)
                 .WithMany(collection.Name)
                 .IsRequired(required);
-
-            // Name FK column after navigation property only when scalar FK exists
-            // If no scalar FK, let EF Core manage the shadow property
-            if (fkScalar != null)
-                rel.HasForeignKey(fkScalar.Name);
-            // no else — let EF Core handle shadow property when no scalar FK exists
         }
         else
         {
-            var rel = dependent
+            dependent
                 .HasOne(principalType, refProp.Name)
                 .WithMany()
                 .IsRequired(required);
+        }
 
-            if (fkScalar != null)
-                rel.HasForeignKey(fkScalar.Name);
-            // no else — let EF Core handle shadow property when no scalar FK exists
+        // After wiring, rename the FK column to the navigation property name.
+        // EF Core auto-creates a shadow property named "{NavName}Id" — we keep
+        // that internal name but rename the database column to just "{NavName}".
+        var shadowPropName = fkScalar?.Name ?? (refProp.Name + "Id");
+        try
+        {
+            modelBuilder.Entity(dependentType)
+                .Property(shadowPropName)
+                .HasColumnName(_naming.ApplyToName(refProp.Name));
+        }
+        catch
+        {
+            // If the shadow property doesn't exist or can't be renamed, leave it
+            // as EF Core named it — don't break the build over column naming
         }
     }
 

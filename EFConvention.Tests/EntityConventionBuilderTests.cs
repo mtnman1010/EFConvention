@@ -19,6 +19,7 @@ using EFConvention.Domain;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.ComponentModel.DataAnnotations;
 using Xunit;
 
 namespace EFConvention.Tests.Builder;
@@ -196,7 +197,7 @@ public class RelationshipTests
             .First(f => f.PrincipalEntityType.ClrType == typeof(Customer))
             .Properties.Single()
             .GetColumnName()
-            .Should().Be("customer_id");
+            .Should().Be("customer");
     }
 }
 
@@ -408,5 +409,157 @@ public class StartupValidationTests
         };
 
         act.Should().NotThrow();
+    }
+}
+
+public class RelationshipDisambiguationTests
+{
+    // -------------------------------------------------------------------------
+    // Multiple collections of the same type — GetCollection StartsWith matching
+    // -------------------------------------------------------------------------
+
+    // Simulates the Person/Withholding scenario from real-world usage
+    private sealed class Principal : IEntity
+    {
+        public int Id { get; set; }
+
+        // Three collections of the same dependent type
+        // Each named to start with the corresponding navigation name
+        public ICollection<Dependent> PrimaryDependents
+        { get; private set; } = new List<Dependent>();
+        public ICollection<Dependent> SecondaryDependents
+        { get; private set; } = new List<Dependent>();
+        public ICollection<Dependent> TertiaryDependents
+        { get; private set; } = new List<Dependent>();
+    }
+
+    private sealed class Dependent : IEntity
+    {
+        public int Id { get; set; }
+
+        // Three navigations back to the same principal type
+        [Required]
+        public Principal Primary { get; set; } = null!;
+        [Required]
+        public Principal Secondary { get; set; } = null!;
+        public Principal Tertiary { get; set; } = null!;
+    }
+
+    private sealed class DisambiguationDb : DbContext
+    {
+        public DisambiguationDb() : base(
+            new DbContextOptionsBuilder<DisambiguationDb>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .EnableServiceProviderCaching(false)
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options)
+        { }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            EntityConventionBuilder
+                .ForTypes(typeof(Principal), typeof(Dependent))
+                .UseSnakeCase()
+                .Apply(modelBuilder);
+        }
+    }
+
+    [Fact]
+    public void MultipleCollections_SameType_ResolvedByStartsWith()
+    {
+        // Should not throw — if disambiguation fails EF Core throws
+        // about duplicate relationship configuration
+        var act = () =>
+        {
+            using var db = new DisambiguationDb();
+            _ = db.Model;
+        };
+
+        act.Should().NotThrow(
+            "GetCollection should disambiguate multiple collections of the " +
+            "same type using StartsWith convention");
+    }
+
+    [Fact]
+    public void MultipleCollections_PrimaryNav_MapsToCorrectCollection()
+    {
+        using var db = new DisambiguationDb();
+        var depType = db.Model.FindEntityType(typeof(Dependent))!;
+
+        // Primary navigation → PrimaryDependents collection
+        var primaryFk = depType.GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Primary");
+
+        primaryFk.Should().NotBeNull();
+        primaryFk!.PrincipalToDependent?.Name
+            .Should().Be("PrimaryDependents",
+                "Primary nav should map to PrimaryDependents collection");
+    }
+
+    [Fact]
+    public void MultipleCollections_SecondaryNav_MapsToCorrectCollection()
+    {
+        using var db = new DisambiguationDb();
+        var depType = db.Model.FindEntityType(typeof(Dependent))!;
+
+        var secondaryFk = depType.GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Secondary");
+
+        secondaryFk.Should().NotBeNull();
+        secondaryFk!.PrincipalToDependent?.Name
+            .Should().Be("SecondaryDependents",
+                "Secondary nav should map to SecondaryDependents collection");
+    }
+
+    [Fact]
+    public void MultipleCollections_TertiaryNav_MapsToCorrectCollection()
+    {
+        using var db = new DisambiguationDb();
+        var depType = db.Model.FindEntityType(typeof(Dependent))!;
+
+        var tertiaryFk = depType.GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Tertiary");
+
+        tertiaryFk.Should().NotBeNull();
+        tertiaryFk!.PrincipalToDependent?.Name
+            .Should().Be("TertiaryDependents",
+                "Tertiary nav should map to TertiaryDependents collection");
+    }
+
+    // -------------------------------------------------------------------------
+    // FK column naming — navigation name not TypeId
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void FkColumn_NamedAfterNavigation_NotTypeId()
+    {
+        using var db = new DisambiguationDb();
+        var depType = db.Model.FindEntityType(typeof(Dependent))!;
+
+        // FK column for Primary navigation should be "primary" not "primary_id"
+        var primaryFk = depType.GetForeignKeys()
+            .First(f => f.DependentToPrincipal?.Name == "Primary");
+
+        primaryFk.Properties.Single().GetColumnName()
+            .Should().Be("primary",
+                "FK column should be named after the navigation property, not TypeId");
+    }
+
+    [Fact]
+    public void FkColumn_MultipleNavsToSameType_AllNamedCorrectly()
+    {
+        using var db = new DisambiguationDb();
+        var depType = db.Model.FindEntityType(typeof(Dependent))!;
+
+        var fksByNav = depType.GetForeignKeys()
+            .Where(f => f.DependentToPrincipal != null)
+            .ToDictionary(
+                f => f.DependentToPrincipal!.Name,
+                f => f.Properties.Single().GetColumnName());
+
+        fksByNav["Primary"].Should().Be("primary");
+        fksByNav["Secondary"].Should().Be("secondary");
+        fksByNav["Tertiary"].Should().Be("tertiary");
     }
 }
