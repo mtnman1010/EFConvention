@@ -96,12 +96,12 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.CreatedAt  = now;
+                    entry.Entity.CreatedDate  = now;
                     entry.Entity.CreatedBy  = user;
                     break;
 
                 case EntityState.Modified:
-                    entry.Entity.ModifiedAt = now;
+                    entry.Entity.ModifiedDate = now;
                     entry.Entity.ModifiedBy = user;
                     break;
             }

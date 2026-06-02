@@ -73,7 +73,7 @@ public abstract class ServiceBaseTestBase
         OrderDate  = DateTime.UtcNow.AddDays(-5),
         CustomerId = 1,
         IsDeleted  = true,
-        DeletedAt  = DateTime.UtcNow.AddDays(-1),
+        DeletedDate  = DateTime.UtcNow.AddDays(-1),
         DeletedBy  = "admin"
     };
 
@@ -101,7 +101,7 @@ public class DeleteAsyncTests : ServiceBaseTestBase
         await svc.Delete(order);
 
         order.IsDeleted.Should().BeTrue();
-        order.DeletedAt.Should().NotBeNull();
+        order.DeletedDate.Should().NotBeNull();
         order.DeletedBy.Should().Be(TestUserName);
     }
 
@@ -149,9 +149,9 @@ public class DeleteAsyncTests : ServiceBaseTestBase
 
         await svc.Delete(order);
 
-        order.DeletedAt.Should().NotBeNull();
-        order.DeletedAt!.Value.Should().BeOnOrAfter(before);
-        order.DeletedAt!.Value.Should().BeOnOrBefore(DateTime.UtcNow);
+        order.DeletedDate.Should().NotBeNull();
+        order.DeletedDate!.Value.Should().BeOnOrAfter(before);
+        order.DeletedDate!.Value.Should().BeOnOrBefore(DateTime.UtcNow);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class RestoreAsyncTests : ServiceBaseTestBase
         await svc.Restore(order);
 
         order.IsDeleted.Should().BeFalse();
-        order.DeletedAt.Should().BeNull();
+        order.DeletedDate.Should().BeNull();
         order.DeletedBy.Should().BeNull();
     }
 

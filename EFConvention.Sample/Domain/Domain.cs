@@ -96,9 +96,9 @@ public class Customer : IEntity, IAuditable
     public ICollection<ProductReview> Reviews { get; private set; } = new List<ProductReview>();
 
     // IAuditable
-    public DateTime  CreatedAt  { get; set; }
+    public DateTime  CreatedDate  { get; set; }
     public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
+    public DateTime? ModifiedDate { get; set; }
     public string?   ModifiedBy { get; set; }
 }
 
@@ -148,14 +148,14 @@ public class Product : IEntity, IAuditable, ISoftDelete
     public ICollection<ProductReview> Reviews    { get; private set; } = new List<ProductReview>();
 
     // IAuditable
-    public DateTime  CreatedAt  { get; set; }
+    public DateTime  CreatedDate  { get; set; }
     public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
+    public DateTime? ModifiedDate { get; set; }
     public string?   ModifiedBy { get; set; }
 
     // ISoftDelete
     public bool      IsDeleted  { get; set; }
-    public DateTime? DeletedAt  { get; set; }
+    public DateTime? DeletedDate  { get; set; }
     public string?   DeletedBy  { get; set; }
 }
 
@@ -200,14 +200,14 @@ public class Order : IEntity, IAuditable, ISoftDelete
     public ICollection<OrderItem> Items { get; private set; } = new List<OrderItem>();
 
     // IAuditable
-    public DateTime  CreatedAt  { get; set; }
+    public DateTime  CreatedDate  { get; set; }
     public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
+    public DateTime? ModifiedDate { get; set; }
     public string?   ModifiedBy { get; set; }
 
     // ISoftDelete
     public bool      IsDeleted  { get; set; }
-    public DateTime? DeletedAt  { get; set; }
+    public DateTime? DeletedDate  { get; set; }
     public string?   DeletedBy  { get; set; }
 }
 
@@ -263,8 +263,8 @@ public class ProductReview : IEntity, IAuditable
     public Customer? Customer  { get; set; }
 
     // IAuditable
-    public DateTime  CreatedAt  { get; set; }
+    public DateTime  CreatedDate  { get; set; }
     public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
+    public DateTime? ModifiedDate { get; set; }
     public string?   ModifiedBy { get; set; }
 }

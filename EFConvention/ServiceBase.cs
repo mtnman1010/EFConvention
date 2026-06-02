@@ -151,7 +151,7 @@ public abstract class ServiceBase<TEntity> where TEntity : class, IEntityBase
             // Row is retained. AuditInterceptor also stamps ModifiedAt/ModifiedBy
             // (if IAuditable) because EF sees this as EntityState.Modified.
             softDeletable.IsDeleted = true;
-            softDeletable.DeletedAt = DateTime.UtcNow;
+            softDeletable.DeletedDate = DateTime.UtcNow;
             softDeletable.DeletedBy = CurrentUser.UserName ?? "system";
         }
         else
@@ -189,7 +189,7 @@ public abstract class ServiceBase<TEntity> where TEntity : class, IEntityBase
                 "and cannot be restored. Hard-deleted rows are permanent.");
 
         softDeletable.IsDeleted = false;
-        softDeletable.DeletedAt = null;
+        softDeletable.DeletedDate = null;
         softDeletable.DeletedBy = null;
 
         // AuditInterceptor stamps ModifiedAt/ModifiedBy automatically.

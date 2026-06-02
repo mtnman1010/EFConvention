@@ -252,7 +252,7 @@ public class SoftDeleteTests
 
     [Theory]
     [InlineData("IsDeleted", "is_deleted")]
-    [InlineData("DeletedAt", "deleted_at")]
+    [InlineData("DeletedDate", "deleted_date")]
     [InlineData("DeletedBy", "deleted_by")]
     public void SoftDeleteColumns_FollowSnakeCaseConvention(string prop, string expected)
     {
@@ -271,13 +271,13 @@ public class SoftDeleteTests
             .WithSoftDelete(cols =>
             {
                 cols.IsDeleted = "Archived";
-                cols.DeletedAt = "ArchivedAt";
+                cols.DeletedDate = "ArchivedDate";
                 cols.DeletedBy = "ArchivedBy";
             }));
 
         var et = db.Model.FindEntityType(typeof(Order))!;
         et.FindProperty("IsDeleted")!.GetColumnName().Should().Be("archived");
-        et.FindProperty("DeletedAt")!.GetColumnName().Should().Be("archived_at");
+        et.FindProperty("DeletedDate")!.GetColumnName().Should().Be("archived_date");
         et.FindProperty("DeletedBy")!.GetColumnName().Should().Be("archived_by");
     }
 }
@@ -289,11 +289,11 @@ public class SoftDeleteTests
 public class AuditColumnTests
 {
     [Theory]
-    [InlineData(typeof(Customer),      "CreatedAt",  "created_at")]
+    [InlineData(typeof(Customer),      "CreatedDate",  "created_date")]
     [InlineData(typeof(Customer),      "CreatedBy",  "created_by")]
-    [InlineData(typeof(Customer),      "ModifiedAt", "modified_at")]
+    [InlineData(typeof(Customer),      "ModifiedDate", "modified_date")]
     [InlineData(typeof(Customer),      "ModifiedBy", "modified_by")]
-    [InlineData(typeof(Order),         "CreatedAt",  "created_at")]
+    [InlineData(typeof(Order),         "CreatedDate",  "created_date")]
     [InlineData(typeof(ProductReview), "CreatedBy",  "created_by")]
     public void AuditColumns_FollowSnakeCaseConvention(Type t, string prop, string expected)
     {
@@ -311,16 +311,16 @@ public class AuditColumnTests
             .UseSnakeCase()
             .WithAuditFields(cols =>
             {
-                cols.CreatedAt = "RecordCreatedDate";
+                cols.CreatedDate = "RecordCreatedDate";
                 cols.CreatedBy = "RecordCreatedUser";
-                cols.ModifiedAt = "RecordModifiedDate";
+                cols.ModifiedDate = "RecordModifiedDate";
                 cols.ModifiedBy = "RecordModifiedUser";
             }));
 
         var et = db.Model.FindEntityType(typeof(Customer))!;
-        et.FindProperty("CreatedAt")!.GetColumnName().Should().Be("record_created_date");
+        et.FindProperty("CreatedDate")!.GetColumnName().Should().Be("record_created_date");
         et.FindProperty("CreatedBy")!.GetColumnName().Should().Be("record_created_user");
-        et.FindProperty("ModifiedAt")!.GetColumnName().Should().Be("record_modified_date");
+        et.FindProperty("ModifiedDate")!.GetColumnName().Should().Be("record_modified_date");
         et.FindProperty("ModifiedBy")!.GetColumnName().Should().Be("record_modified_user");
     }
 
