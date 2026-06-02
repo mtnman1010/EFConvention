@@ -1,11 +1,11 @@
 // =============================================================================
-// EFConventions — Version 2.1
+// EFConvention — Version 2.2
 // Data/StoreDb.cs  [APPLICATION CODE — not part of the library]
 //
-// Change from v2.0:
-//   ICurrentUserService is now defined in the EFConventions library
-//   (Core/DomainContracts.cs). This file no longer declares the interface —
-//   it only provides the two concrete implementations and the DI wiring.
+// Changes from v2.1:
+//   Convention updated from UseSnakeCase() to default PascalCase to match
+//   the StoreDb.sql schema script. Snake_case is still fully supported —
+//   see the README for the UseSnakeCase() configuration pattern.
 //
 // Contents:
 //   HttpContextCurrentUserService — ASP.NET Core web app implementation
@@ -26,7 +26,7 @@ namespace EFConvention.Sample;
 // -----------------------------------------------------------------------------
 // ICurrentUserService implementations  [APPLICATION CODE]
 //
-// ICurrentUserService itself is now in the library (EFConventions namespace).
+// ICurrentUserService is defined in the library (EFConvention namespace).
 // Only the implementations live here — one per hosting environment.
 // -----------------------------------------------------------------------------
 
@@ -72,6 +72,15 @@ public sealed class SystemUserService : ICurrentUserService
 ///     <see cref="UnitOfWork"/> itself.
 ///   </description></item>
 /// </list>
+///
+/// <para>
+/// Uses the default PascalCase naming convention — table names, column names,
+/// and FK columns all match C# class and property names exactly.
+/// To use snake_case instead, change <c>b => b.WithFullAudit()</c> to
+/// <c>b => b.UseSnakeCase().WithFullAudit()</c> and update your schema script
+/// accordingly.
+/// </para>
+///
 /// All other layers depend on <see cref="IUnitOfWork"/> and never reference
 /// this class directly.
 /// </summary>
@@ -87,8 +96,8 @@ public sealed class StoreDb : UnitOfWork
     /// </param>
     public StoreDb(string connectionString, ICurrentUserService currentUser)
         : base(
-            domainAssembly:       typeof(Customer).Assembly,
-            configureConventions: b => b.UseSnakeCase().WithFullAudit())
+            domainAssembly: typeof(Customer).Assembly,
+            configureConventions: b => b.WithFullAudit())  // PascalCase (default)
     {
         _connectionString = connectionString;
         _auditInterceptor = new AuditInterceptor(currentUser);
@@ -100,6 +109,7 @@ public sealed class StoreDb : UnitOfWork
         if (!options.IsConfigured)
             options
                 .UseSqlServer(_connectionString)
+                .EnableServiceProviderCaching(false)
                 .AddInterceptors(_auditInterceptor);
     }
 }
@@ -109,7 +119,7 @@ public sealed class StoreDb : UnitOfWork
 // -----------------------------------------------------------------------------
 
 /// <summary>
-/// Extension methods to register the full EFConventions stack.
+/// Extension methods to register the full EFConvention stack.
 /// Call from <c>Program.cs</c> during application startup.
 /// </summary>
 public static class ServiceRegistration
@@ -138,9 +148,9 @@ public static class ServiceRegistration
                 connectionString,
                 sp.GetRequiredService<ICurrentUserService>()));
 
-        services.AddScoped<ICustomerService,      CustomerService>();
-        services.AddScoped<IProductService,       ProductService>();
-        services.AddScoped<IOrderService,         OrderService>();
+        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IProductReviewService, ProductReviewService>();
 
         return services;
@@ -161,9 +171,9 @@ public static class ServiceRegistration
                 connectionString,
                 sp.GetRequiredService<ICurrentUserService>()));
 
-        services.AddScoped<ICustomerService,      CustomerService>();
-        services.AddScoped<IProductService,       ProductService>();
-        services.AddScoped<IOrderService,         OrderService>();
+        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IProductReviewService, ProductReviewService>();
 
         return services;

@@ -1,30 +1,35 @@
 // =============================================================================
-// EFConventions — Version 2.1
+// EFConvention — Version 2.2
 // Domain/Domain.cs
 //
 // Expanded domain model for the StoreDb example. Covers every feature of
 // EntityConventionBuilder:
 //
-//   Address      — plain entity, no audit, no soft delete
-//   Category     — plain entity (pluralisation example: Categories table)
-//   Customer     — IAuditable only, hard delete
-//   Product      — IAuditable + ISoftDelete, decimal with [Precision]
-//   Order        — IAuditable + ISoftDelete, required FK, private collection
-//   OrderItem    — plain entity, required FK to both Order and Product
+//   Address       — plain entity, no audit, no soft delete
+//   Category      — plain entity (pluralisation example: Categories table)
+//   Customer      — IAuditable only, hard delete
+//   Product       — IAuditable + ISoftDelete, decimal with [Precision]
+//   Order         — IAuditable + ISoftDelete, required FK, private collection
+//   OrderItem     — plain entity, required FKs to both Order and Product
 //   ProductReview — optional FK (nullable CustomerId), IAuditable
 //
-// Navigation property rules enforced by the convention builder:
+// Navigation property conventions enforced by EntityConventionBuilder:
 //   - Collection properties use 'private set;'  (public setter = startup error)
 //   - Scalar FK properties are non-nullable int  → required relationship
 //   - Scalar FK properties are nullable int?     → optional relationship
 //   - [Required] on a navigation also forces required
 //   - [Precision(18,2)] on decimal → applied automatically
+//
+// FK column naming (v2.2):
+//   FK columns are named after the navigation property, not the scalar FK
+//   property. AddressId scalar → "Address" database column,
+//   CustomerId scalar → "Customer" database column, etc.
+//   The scalar FK properties (AddressId, CustomerId etc.) still exist on
+//   the C# entity for required/optional detection — only the DB column
+//   name changes.
 // =============================================================================
 
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using EFConvention;
 using Microsoft.EntityFrameworkCore;
 
 namespace EFConvention.Domain;
@@ -35,20 +40,19 @@ namespace EFConvention.Domain;
 
 /// <summary>
 /// A physical mailing address. Used by <see cref="Customer"/> as a required
-/// reference navigation, demonstrating a required one-to-one-like relationship.
-/// Plain entity — no audit fields, no soft delete.
+/// reference navigation. Plain entity — no audit fields, no soft delete.
 /// </summary>
 public class Address : IEntity
 {
-    public int    Id     { get; set; }
+    public int Id { get; set; }
     public string Street { get; set; } = string.Empty;
-    public string City   { get; set; } = string.Empty;
-    public string State  { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
     public string PostalCode { get; set; } = string.Empty;
 }
 
 // -----------------------------------------------------------------------------
-// Category — plain entity (demonstrates pluralised table name: Categories)
+// Category — plain entity
 // -----------------------------------------------------------------------------
 
 /// <summary>
@@ -58,8 +62,8 @@ public class Address : IEntity
 /// </summary>
 public class Category : IEntity
 {
-    public int    Id          { get; set; }
-    public string Name        { get; set; } = string.Empty;
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 
     // Private setter — collection navigation, encapsulated
@@ -72,34 +76,37 @@ public class Category : IEntity
 
 /// <summary>
 /// A store customer. Implements <see cref="IAuditable"/> — created/modified
-/// fields are stamped automatically. Does NOT implement <see cref="ISoftDelete"/>
-/// so <c>CustomerService.DeleteAsync</c> issues a physical DELETE.
+/// fields are stamped automatically by <see cref="AuditInterceptor"/>.
+/// Does NOT implement <see cref="ISoftDelete"/> so
+/// <c>CustomerService.DeleteAsync</c> issues a physical DELETE.
 ///
 /// <para>
 /// <c>AddressId</c> is <c>int</c> (non-nullable) → required relationship.
 /// The convention builder calls <c>.IsRequired(true)</c> automatically.
+/// Database FK column is named <c>Address</c> (navigation property name).
 /// </para>
 /// </summary>
 public class Customer : IEntity, IAuditable
 {
-    public int    Id    { get; set; }
-    public string Name  { get; set; } = string.Empty;
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
 
-    // Required reference — non-nullable FK → convention builder marks as required
-    public int     AddressId { get; set; }
-    public Address Address   { get; set; } = null!;
+    // Required reference — non-nullable int → required FK
+    // DB column: "Address" (navigation name, not "AddressId")
+    public int AddressId { get; set; }
+    public Address Address { get; set; } = null!;
 
-    // Private setter — encapsulated collection
-    public ICollection<Order>         Orders  { get; private set; } = new List<Order>();
+    // Private setters — encapsulated collections
+    public ICollection<Order> Orders { get; private set; } = new List<Order>();
     public ICollection<ProductReview> Reviews { get; private set; } = new List<ProductReview>();
 
-    // IAuditable
-    public DateTime  CreatedDate  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
+    // IAuditable — stamped automatically by AuditInterceptor
+    public DateTime CreatedDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedDate { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }
 
 // -----------------------------------------------------------------------------
@@ -110,8 +117,8 @@ public class Customer : IEntity, IAuditable
 /// A store product. Demonstrates:
 /// <list type="bullet">
 ///   <item><description>
-///     <c>[Precision(18, 2)]</c> on <c>Price</c> — applied automatically by
-///     the convention builder's decimal precision pass.
+///     <c>[Precision(18, 2)]</c> on <c>Price</c> and <c>CostPrice</c> —
+///     applied automatically by the convention builder's decimal precision pass.
 ///   </description></item>
 ///   <item><description>
 ///     <see cref="ISoftDelete"/> — products are never physically deleted,
@@ -122,15 +129,16 @@ public class Customer : IEntity, IAuditable
 ///   </description></item>
 ///   <item><description>
 ///     <c>CategoryId</c> is <c>int</c> (non-nullable) → required FK.
+///     DB column named <c>Category</c> (navigation property name).
 ///   </description></item>
 /// </list>
 /// </summary>
 public class Product : IEntity, IAuditable, ISoftDelete
 {
-    public int    Id          { get; set; }
-    public string Name        { get; set; } = string.Empty;
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Sku         { get; set; } = string.Empty;
+    public string Sku { get; set; } = string.Empty;
 
     // [Precision] picked up automatically by ConfigureDecimalPrecision
     [Precision(18, 2)]
@@ -140,23 +148,24 @@ public class Product : IEntity, IAuditable, ISoftDelete
     public decimal CostPrice { get; set; }
 
     // Required FK — non-nullable int
-    public int      CategoryId { get; set; }
-    public Category Category   { get; set; } = null!;
+    // DB column: "Category" (navigation name, not "CategoryId")
+    public int CategoryId { get; set; }
+    public Category Category { get; set; } = null!;
 
-    // Private setter — encapsulated collection
-    public ICollection<OrderItem>     OrderItems { get; private set; } = new List<OrderItem>();
-    public ICollection<ProductReview> Reviews    { get; private set; } = new List<ProductReview>();
+    // Private setters — encapsulated collections
+    public ICollection<OrderItem> OrderItems { get; private set; } = new List<OrderItem>();
+    public ICollection<ProductReview> Reviews { get; private set; } = new List<ProductReview>();
 
-    // IAuditable
-    public DateTime  CreatedDate  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
+    // IAuditable — stamped automatically by AuditInterceptor
+    public DateTime CreatedDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedDate { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 
-    // ISoftDelete
-    public bool      IsDeleted  { get; set; }
-    public DateTime? DeletedDate  { get; set; }
-    public string?   DeletedBy  { get; set; }
+    // ISoftDelete — managed by ServiceBase.DeleteAsync
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedDate { get; set; }
+    public string? DeletedBy { get; set; }
 }
 
 // -----------------------------------------------------------------------------
@@ -173,6 +182,7 @@ public class Product : IEntity, IAuditable, ISoftDelete
 ///   <item><description>
 ///     <c>[Required]</c> on the <c>Customer</c> navigation — explicitly marks
 ///     the relationship as required regardless of FK nullability.
+///     DB column named <c>Customer</c> (navigation property name).
 ///   </description></item>
 ///   <item><description>
 ///     <c>[Precision(18, 2)]</c> on <c>TotalAmount</c>.
@@ -184,31 +194,32 @@ public class Product : IEntity, IAuditable, ISoftDelete
 /// </summary>
 public class Order : IEntity, IAuditable, ISoftDelete
 {
-    public int      Id          { get; set; }
-    public DateTime OrderDate   { get; set; }
-    public string   Status      { get; set; } = "Pending";
+    public int Id { get; set; }
+    public DateTime OrderDate { get; set; }
+    public string Status { get; set; } = "Pending";
 
     [Precision(18, 2)]
     public decimal TotalAmount { get; set; }
 
     // [Required] on navigation — explicitly required regardless of FK type
+    // DB column: "Customer" (navigation name, not "CustomerId")
     [Required]
-    public int      CustomerId { get; set; }
-    public Customer Customer   { get; set; } = null!;
+    public int CustomerId { get; set; }
+    public Customer Customer { get; set; } = null!;
 
     // Private setter — encapsulated collection
     public ICollection<OrderItem> Items { get; private set; } = new List<OrderItem>();
 
-    // IAuditable
-    public DateTime  CreatedDate  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
+    // IAuditable — stamped automatically by AuditInterceptor
+    public DateTime CreatedDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedDate { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 
-    // ISoftDelete
-    public bool      IsDeleted  { get; set; }
-    public DateTime? DeletedDate  { get; set; }
-    public string?   DeletedBy  { get; set; }
+    // ISoftDelete — managed by ServiceBase.DeleteAsync
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedDate { get; set; }
+    public string? DeletedBy { get; set; }
 }
 
 // -----------------------------------------------------------------------------
@@ -217,24 +228,28 @@ public class Order : IEntity, IAuditable, ISoftDelete
 
 /// <summary>
 /// A line item within an <see cref="Order"/>. Both FK properties are
-/// non-nullable <c>int</c> → both relationships are detected as required
+/// non-nullable <c>int</c> → both relationships detected as required
 /// automatically. Plain entity — no audit, no soft delete.
+/// DB FK columns named <c>Order</c> and <c>Product</c>
+/// (navigation property names).
 /// </summary>
 public class OrderItem : IEntity
 {
-    public int Id       { get; set; }
+    public int Id { get; set; }
     public int Quantity { get; set; }
 
     [Precision(18, 2)]
     public decimal UnitPrice { get; set; }
 
     // Required FK — non-nullable int
-    public int     OrderId { get; set; }
-    public Order   Order   { get; set; } = null!;
+    // DB column: "Order" (navigation name, not "OrderId")
+    public int OrderId { get; set; }
+    public Order Order { get; set; } = null!;
 
     // Required FK — non-nullable int
-    public int     ProductId { get; set; }
-    public Product Product   { get; set; } = null!;
+    // DB column: "Product" (navigation name, not "ProductId")
+    public int ProductId { get; set; }
+    public Product Product { get; set; } = null!;
 }
 
 // -----------------------------------------------------------------------------
@@ -246,25 +261,28 @@ public class OrderItem : IEntity
 /// relationship: <c>CustomerId</c> is <c>int?</c> (nullable), so the
 /// convention builder calls <c>.IsRequired(false)</c> automatically —
 /// a review can exist even if the customer account is deleted.
-/// Also implements <see cref="IAuditable"/>.
+/// DB FK columns named <c>Product</c> (required) and <c>Customer</c>
+/// (optional, nullable). Also implements <see cref="IAuditable"/>.
 /// </summary>
 public class ProductReview : IEntity, IAuditable
 {
-    public int    Id      { get; set; }
-    public int    Rating  { get; set; }   // 1–5
+    public int Id { get; set; }
+    public int Rating { get; set; }   // 1–5
     public string Comment { get; set; } = string.Empty;
 
     // Required FK — non-nullable int
-    public int     ProductId { get; set; }
-    public Product Product   { get; set; } = null!;
+    // DB column: "Product" (navigation name, not "ProductId")
+    public int ProductId { get; set; }
+    public Product Product { get; set; } = null!;
 
     // Optional FK — nullable int? → IsRequired(false) detected automatically
-    public int?     CustomerId { get; set; }
-    public Customer? Customer  { get; set; }
+    // DB column: "Customer" (navigation name, not "CustomerId")
+    public int? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
 
-    // IAuditable
-    public DateTime  CreatedDate  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
+    // IAuditable — stamped automatically by AuditInterceptor
+    public DateTime CreatedDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedDate { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }
