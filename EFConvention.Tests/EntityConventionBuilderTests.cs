@@ -137,8 +137,12 @@ public class NamingConventionTests
 
 public class RelationshipTests
 {
+    // -------------------------------------------------------------------------
+    // Required / optional detection — scalar FK property (backwards compatible)
+    // -------------------------------------------------------------------------
+
     [Fact]
-    public void Customer_Address_IsRequired_NonNullableFk()
+    public void Customer_Address_IsRequired_NonNullableScalarFk()
     {
         using var db = new TestDb(b => b.UseSnakeCase());
         var fk = db.Model.FindEntityType(typeof(Customer))!
@@ -146,11 +150,12 @@ public class RelationshipTests
             .FirstOrDefault(f => f.PrincipalEntityType.ClrType == typeof(Address));
 
         fk.Should().NotBeNull();
-        fk!.IsRequired.Should().BeTrue("AddressId is int (non-nullable)");
+        fk!.IsRequired.Should().BeTrue(
+            "AddressId is int (non-nullable scalar FK) → required");
     }
 
     [Fact]
-    public void ProductReview_Customer_IsOptional_NullableFk()
+    public void ProductReview_Customer_IsOptional_NullableScalarFk()
     {
         using var db = new TestDb(b => b.UseSnakeCase());
         var fk = db.Model.FindEntityType(typeof(ProductReview))!
@@ -158,7 +163,8 @@ public class RelationshipTests
             .FirstOrDefault(f => f.PrincipalEntityType.ClrType == typeof(Customer));
 
         fk.Should().NotBeNull();
-        fk!.IsRequired.Should().BeFalse("CustomerId is int? (nullable)");
+        fk!.IsRequired.Should().BeFalse(
+            "CustomerId is int? (nullable scalar FK) → optional");
     }
 
     [Fact]
@@ -170,7 +176,8 @@ public class RelationshipTests
             .FirstOrDefault(f => f.PrincipalEntityType.ClrType == typeof(Customer));
 
         fk.Should().NotBeNull();
-        fk!.IsRequired.Should().BeTrue("Order.Customer carries [Required]");
+        fk!.IsRequired.Should().BeTrue(
+            "Order.Customer carries [Required] → required regardless of FK type");
     }
 
     [Fact]
@@ -181,19 +188,178 @@ public class RelationshipTests
 
         itemType.GetForeignKeys()
             .First(f => f.PrincipalEntityType.ClrType == typeof(Order))
-            .IsRequired.Should().BeTrue();
+            .IsRequired.Should().BeTrue(
+                "OrderId is int (non-nullable scalar FK) → required");
 
         itemType.GetForeignKeys()
             .First(f => f.PrincipalEntityType.ClrType == typeof(Product))
-            .IsRequired.Should().BeTrue();
+            .IsRequired.Should().BeTrue(
+                "ProductId is int (non-nullable scalar FK) → required");
+    }
+
+    // -------------------------------------------------------------------------
+    // Required / optional detection — nullable reference type (v2.3)
+    // -------------------------------------------------------------------------
+
+    private sealed class PrincipalNrt : IEntity
+    {
+        public int Id { get; set; }
+
+        // "RequiredDependents".StartsWith("Required") → maps to Required nav
+        public ICollection<DependentNrt> RequiredDependents
+        { get; private set; } = new List<DependentNrt>();
+
+        // "OptionalPrincipalDependents".StartsWith("OptionalPrincipal") → maps to OptionalPrincipal nav
+        public ICollection<DependentNrt> OptionalPrincipalDependents
+        { get; private set; } = new List<DependentNrt>();
+    }
+
+    private sealed class DependentNrt : IEntity
+    {
+        public int Id { get; set; }
+
+        // Non-nullable → required (no scalar FK property)
+        public PrincipalNrt Required { get; set; } = null!;
+
+        // Nullable → optional (no scalar FK property)
+        public PrincipalNrt? OptionalPrincipal { get; set; }
+    }
+
+    private sealed class NrtDb : DbContext
+    {
+        public NrtDb() : base(
+            new DbContextOptionsBuilder<NrtDb>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .EnableServiceProviderCaching(false)
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options)
+        { }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            EntityConventionBuilder
+                .ForTypes(typeof(PrincipalNrt), typeof(DependentNrt))
+                .Apply(modelBuilder);
+        }
     }
 
     [Fact]
-    public void Customer_Orders_FkColumnName_IsSnakeCase()
+    public void NonNullableNavigation_NoScalarFk_IsRequired()
+    {
+        using var db = new NrtDb();
+        var fk = db.Model.FindEntityType(typeof(DependentNrt))!
+            .GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Required");
+
+        fk.Should().NotBeNull();
+        fk!.IsRequired.Should().BeTrue(
+            "non-nullable navigation without scalar FK → required via NullabilityInfoContext");
+    }
+
+    [Fact]
+    public void NullableNavigation_NoScalarFk_IsOptional()
+    {
+        using var db = new NrtDb();
+        var fk = db.Model.FindEntityType(typeof(DependentNrt))!
+            .GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "OptionalPrincipal");
+
+        fk.Should().NotBeNull();
+        fk!.IsRequired.Should().BeFalse(
+            "nullable navigation without scalar FK → optional via NullabilityInfoContext");
+    }
+
+    [Fact]
+    public void NoScalarFk_FkColumnNamedAfterNavigation()
+    {
+        using var db = new NrtDb();
+        var fk = db.Model.FindEntityType(typeof(DependentNrt))!
+            .GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Required");
+
+        fk!.Properties.Single().GetColumnName()
+            .Should().Be("Required",
+                "FK column named after navigation property even without scalar FK");
+    }
+
+    [Fact]
+    public void NoScalarFk_ModelBuilds_WithoutError()
+    {
+        var act = () =>
+        {
+            using var db = new NrtDb();
+            _ = db.Model;
+        };
+
+        act.Should().NotThrow(
+            "domain objects without scalar FK properties should build cleanly");
+    }
+
+    // -------------------------------------------------------------------------
+    // FK column naming — navigation property name, not TypeId
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Customer_Orders_FkColumn_IsNavigationName_SnakeCase()
     {
         using var db = new TestDb(b => b.UseSnakeCase());
         db.Model.FindEntityType(typeof(Order))!
             .GetForeignKeys()
+            .First(f => f.PrincipalEntityType.ClrType == typeof(Customer))
+            .Properties.Single()
+            .GetColumnName()
+            .Should().Be("customer",
+                "FK column named after navigation property 'Customer' → snake_case 'customer'");
+    }
+
+    [Fact]
+    public void Customer_Address_FkColumn_IsNavigationName_SnakeCase()
+    {
+        using var db = new TestDb(b => b.UseSnakeCase());
+        db.Model.FindEntityType(typeof(Customer))!
+            .GetForeignKeys()
+            .First(f => f.PrincipalEntityType.ClrType == typeof(Address))
+            .Properties.Single()
+            .GetColumnName()
+            .Should().Be("address",
+                "FK column named after navigation property 'Address' → snake_case 'address'");
+    }
+
+    [Fact]
+    public void OrderItem_FkColumns_AreNavigationNames_SnakeCase()
+    {
+        using var db = new TestDb(b => b.UseSnakeCase());
+        var itemType = db.Model.FindEntityType(typeof(OrderItem))!;
+
+        itemType.GetForeignKeys()
+            .First(f => f.PrincipalEntityType.ClrType == typeof(Order))
+            .Properties.Single()
+            .GetColumnName()
+            .Should().Be("order",
+                "FK column named after navigation property 'Order' → snake_case 'order'");
+
+        itemType.GetForeignKeys()
+            .First(f => f.PrincipalEntityType.ClrType == typeof(Product))
+            .Properties.Single()
+            .GetColumnName()
+            .Should().Be("product",
+                "FK column named after navigation property 'Product' → snake_case 'product'");
+    }
+
+    [Fact]
+    public void ProductReview_FkColumns_AreNavigationNames_SnakeCase()
+    {
+        using var db = new TestDb(b => b.UseSnakeCase());
+        var reviewType = db.Model.FindEntityType(typeof(ProductReview))!;
+
+        reviewType.GetForeignKeys()
+            .First(f => f.PrincipalEntityType.ClrType == typeof(Product))
+            .Properties.Single()
+            .GetColumnName()
+            .Should().Be("product");
+
+        reviewType.GetForeignKeys()
             .First(f => f.PrincipalEntityType.ClrType == typeof(Customer))
             .Properties.Single()
             .GetColumnName()
@@ -561,5 +727,123 @@ public class RelationshipDisambiguationTests
         fksByNav["Primary"].Should().Be("primary");
         fksByNav["Secondary"].Should().Be("secondary");
         fksByNav["Tertiary"].Should().Be("tertiary");
+    }
+}
+
+public class NullableReferenceTypeTests
+{
+    private sealed class PrincipalNrt : IEntity
+    {
+        public int Id { get; set; }
+
+        // Named to match StartsWith disambiguation convention
+        // "RequiredDependents".StartsWith("Required") → Required nav
+        public ICollection<DependentNrt> RequiredDependents
+        { get; private set; } = new List<DependentNrt>();
+
+        // "OptionalPrincipalDependents".StartsWith("OptionalPrincipal") → OptionalPrincipal nav
+        public ICollection<DependentNrt> OptionalPrincipalDependents
+        { get; private set; } = new List<DependentNrt>();
+    }
+
+    private sealed class DependentNrt : IEntity
+    {
+        public int Id { get; set; }
+
+        // Non-nullable → required (no scalar FK property)
+        public PrincipalNrt Required { get; set; } = null!;
+
+        // Nullable → optional (no scalar FK property)
+        public PrincipalNrt? OptionalPrincipal { get; set; }
+    }
+
+    private sealed class NrtDb : DbContext
+    {
+        public NrtDb() : base(
+            new DbContextOptionsBuilder<NrtDb>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .EnableServiceProviderCaching(false)
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options)
+        { }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            EntityConventionBuilder
+                .ForTypes(typeof(PrincipalNrt), typeof(DependentNrt))
+                .Apply(modelBuilder);
+        }
+    }
+
+    [Fact]
+    public void ModelBuilds_WithoutError()
+    {
+        var act = () =>
+        {
+            using var db = new NrtDb();
+            _ = db.Model;
+        };
+
+        act.Should().NotThrow(
+            "domain objects without scalar FK properties should build cleanly");
+    }
+
+    [Fact]
+    public void NonNullableNavigation_NoScalarFk_IsRequired()
+    {
+        using var db = new NrtDb();
+        var fk = db.Model.FindEntityType(typeof(DependentNrt))!
+            .GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Required");
+
+        fk.Should().NotBeNull();
+        fk!.IsRequired.Should().BeTrue(
+            "non-nullable navigation without scalar FK → required via NullabilityInfoContext");
+    }
+
+    [Fact]
+    public void NullableNavigation_NoScalarFk_IsOptional()
+    {
+        using var db = new NrtDb();
+        var fk = db.Model.FindEntityType(typeof(DependentNrt))!
+            .GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "OptionalPrincipal");
+
+        fk.Should().NotBeNull();
+        fk!.IsRequired.Should().BeFalse(
+            "nullable navigation without scalar FK → optional via NullabilityInfoContext");
+    }
+
+    [Fact]
+    public void NonNullableNavigation_FkColumnNamedAfterNavigation()
+    {
+        using var db = new NrtDb();
+        var fk = db.Model.FindEntityType(typeof(DependentNrt))!
+            .GetForeignKeys()
+            .FirstOrDefault(f => f.DependentToPrincipal?.Name == "Required");
+
+        fk!.Properties.Single().GetColumnName()
+            .Should().Be("Required",
+                "FK column named after navigation property even without scalar FK");
+    }
+
+    [Fact]
+    public void StartsWith_Disambiguation_WorksAlongsideNullableReferenceTypes()
+    {
+        using var db = new NrtDb();
+        var depType = db.Model.FindEntityType(typeof(DependentNrt))!;
+
+        // Required nav → RequiredDependents collection
+        depType.GetForeignKeys()
+            .First(f => f.DependentToPrincipal?.Name == "Required")
+            .PrincipalToDependent?.Name
+            .Should().Be("RequiredDependents");
+
+        // OptionalPrincipal nav → OptionalPrincipalDependents collection
+        depType.GetForeignKeys()
+            .First(f => f.DependentToPrincipal?.Name == "OptionalPrincipal")
+            .PrincipalToDependent?.Name
+            .Should().Be("OptionalPrincipalDependents");
     }
 }

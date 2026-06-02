@@ -17,7 +17,7 @@ public sealed class ProductService : ServiceBase<Product>, IProductService
     public async Task<IReadOnlyList<Product>> GetProductsByCategoryAsync(
         int categoryId, CancellationToken ct = default) =>
         await UnitOfWork.Query<Product>()
-            .Where(p => p.CategoryId == categoryId)
+            .Where(p => p.Category.Id == categoryId)
             .OrderBy(p => p.Name)
             .ToListAsync(ct);
 
