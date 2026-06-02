@@ -213,6 +213,174 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 ---
 
+## ICurrentUserService — hosting environments
+
+`ICurrentUserService` is only required when audit stamping is enabled via `WithAuditFields()` or `WithFullAudit()`. If you don't use audit stamping, you never need to implement or register it. For applications that do use audit stamping, the implementation varies by hosting environment.
+
+### ASP.NET Core MVC or Razor Pages
+
+Resolves the username from the authenticated user on the current HTTP request:
+
+```csharp
+public class HttpContextCurrentUserService : ICurrentUserService
+{
+    private readonly IHttpContextAccessor _accessor;
+    public HttpContextCurrentUserService(IHttpContextAccessor accessor)
+        => _accessor = accessor;
+    public string? UserName => _accessor.HttpContext?.User?.Identity?.Name;
+}
+
+// Program.cs
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
+```
+
+### ASP.NET Core Web API with JWT
+
+Resolves the username from JWT claims — use the claim type that your token provider stamps:
+
+```csharp
+public class JwtCurrentUserService : ICurrentUserService
+{
+    private readonly IHttpContextAccessor _accessor;
+    public JwtCurrentUserService(IHttpContextAccessor accessor)
+        => _accessor = accessor;
+    public string? UserName =>
+        _accessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? _accessor.HttpContext?.User?.FindFirst("sub")?.Value;
+}
+
+// Program.cs
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, JwtCurrentUserService>();
+```
+
+### Blazor Server
+
+Resolves from the `AuthenticationStateProvider` which tracks the authenticated user across the SignalR circuit:
+
+```csharp
+public class BlazorCurrentUserService : ICurrentUserService
+{
+    private readonly AuthenticationStateProvider _authState;
+    public BlazorCurrentUserService(AuthenticationStateProvider authState)
+        => _authState = authState;
+
+    public string? UserName
+    {
+        get
+        {
+            var state = _authState.GetAuthenticationStateAsync().GetAwaiter().GetResult();
+            return state.User?.Identity?.Name;
+        }
+    }
+}
+
+// Program.cs
+builder.Services.AddScoped<ICurrentUserService, BlazorCurrentUserService>();
+```
+
+### WPF / WinForms / MVVM desktop app
+
+Resolves from your application's session or authentication state. The implementation depends on how your app manages identity:
+
+```csharp
+// Option 1 — Windows authentication (domain-joined apps)
+public class WindowsCurrentUserService : ICurrentUserService
+{
+    public string? UserName =>
+        System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+}
+
+// Option 2 — custom login session
+public class SessionCurrentUserService : ICurrentUserService
+{
+    private readonly ISessionService _session;
+    public SessionCurrentUserService(ISessionService session)
+        => _session = session;
+    public string? UserName => _session.CurrentUser?.Username;
+}
+
+// Option 3 — static app-level user (simple desktop apps)
+public class AppCurrentUserService : ICurrentUserService
+{
+    public string? UserName => App.Current.Properties["LoggedInUser"] as string;
+}
+```
+
+### Background jobs and hosted services
+
+Use `SystemUserService` which always returns `"system"`. Suitable for any process that runs without a human user context:
+
+```csharp
+public class SystemUserService : ICurrentUserService
+{
+    public string? UserName => "system";
+}
+
+// Program.cs — background job host
+services.AddScoped<ICurrentUserService, SystemUserService>();
+```
+
+### Console apps and CLI tools
+
+Same as background jobs — use `SystemUserService`, or prompt for a username at startup:
+
+```csharp
+public class ConsoleCurrentUserService : ICurrentUserService
+{
+    public string? UserName { get; }
+    public ConsoleCurrentUserService(string userName) => UserName = userName;
+}
+
+// Program.cs
+var userName = args.FirstOrDefault() ?? Environment.UserName;
+services.AddSingleton<ICurrentUserService>(new ConsoleCurrentUserService(userName));
+```
+
+### Unit tests
+
+Use a fixed-identity implementation for deterministic audit field assertions:
+
+```csharp
+public class FixedUserService : ICurrentUserService
+{
+    public string? UserName { get; }
+    public FixedUserService(string name = "test-user") => UserName = name;
+}
+
+// In test setup
+var userService = new FixedUserService("test-user");
+var db = new InMemoryStoreDb(userService);
+```
+
+### No audit stamping needed
+
+If your application doesn't need audit stamping, don't call `WithAuditFields()` or `WithFullAudit()`. Your entities don't implement `IAuditable`, you don't register `AuditInterceptor`, and `ICurrentUserService` is never referenced:
+
+```csharp
+// No ICurrentUserService needed
+public sealed class MyDb : UnitOfWork
+{
+    public MyDb(string connectionString)
+        : base(
+            domainAssembly:       typeof(Customer).Assembly,
+            configureConventions: b => b.UseSnakeCase())  // no WithAuditFields
+    {
+        _connectionString = connectionString;
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options)
+    {
+        if (!options.IsConfigured)
+            options.UseSqlServer(_connectionString);
+        // no AddInterceptors needed
+    }
+}
+```
+
+---
+
 ## IUnitOfWork
 
 All services depend on `IUnitOfWork` rather than the concrete `StoreDb`, enabling clean unit tests with a mock. The interface exposes:
