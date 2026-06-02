@@ -4,6 +4,37 @@ A lightweight EF Core convention-over-configuration library. Drop it into any pr
 
 ---
 
+## Breaking changes in v2.2
+
+If you are upgrading from v2.1, update your domain entities and any code referencing these members:
+
+| v2.1 | v2.2 | Where |
+|---|---|---|
+| `IAuditable.CreatedAt` | `IAuditable.CreatedDate` | Interface + domain entities |
+| `IAuditable.ModifiedAt` | `IAuditable.ModifiedDate` | Interface + domain entities |
+| `ISoftDelete.DeletedAt` | `ISoftDelete.DeletedDate` | Interface + domain entities |
+| `AuditColumnNames.CreatedAt` | `AuditColumnNames.CreatedDate` | Builder configuration |
+| `AuditColumnNames.ModifiedAt` | `AuditColumnNames.ModifiedDate` | Builder configuration |
+| `SoftDeleteColumnNames.DeletedAt` | `SoftDeleteColumnNames.DeletedDate` | Builder configuration |
+
+Default column names also changed:
+
+| Property | v2.1 default column | v2.2 default column |
+|---|---|---|
+| `CreatedDate` | `CreatedAt` | `CreatedDate` |
+| `CreatedBy` | `CreatedBy` | `CreatedBy` |
+| `ModifiedDate` | `ModifiedAt` | `ModifiedDate` |
+| `ModifiedBy` | `ModifiedBy` | `ModifiedBy` |
+| `DeletedDate` | `DeletedAt` | `DeletedDate` |
+| `DeletedBy` | `DeletedBy` | `DeletedBy` |
+
+**New in v2.2:**
+- FK columns are now named after the navigation property (`Customer`) rather than the type with Id suffix (`CustomerId`)
+- Multiple collections of the same type on the principal are now resolved automatically using a `StartsWith` name convention
+- `ForTypes(params Type[] types)` factory method for registering a specific subset of entity types
+
+---
+
 ## What's in the library
 
 | File | Purpose |
@@ -42,10 +73,10 @@ public class Customer : IEntity, IAuditable
     public ICollection<Order> Orders { get; private set; } = new List<Order>();
 
     // IAuditable — stamped automatically by AuditInterceptor
-    public DateTime  CreatedAt  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public DateTime  CreatedDate  { get; set; }
+    public string    CreatedBy    { get; set; } = string.Empty;
+    public DateTime? ModifiedDate { get; set; }
+    public string?   ModifiedBy   { get; set; }
 }
 
 public class Order : IEntity, IAuditable, ISoftDelete
@@ -58,15 +89,15 @@ public class Order : IEntity, IAuditable, ISoftDelete
     public ICollection<OrderItem> Items { get; private set; } = new List<OrderItem>();
 
     // IAuditable
-    public DateTime  CreatedAt  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public DateTime  CreatedDate  { get; set; }
+    public string    CreatedBy    { get; set; } = string.Empty;
+    public DateTime? ModifiedDate { get; set; }
+    public string?   ModifiedBy   { get; set; }
 
     // ISoftDelete
-    public bool      IsDeleted { get; set; }
-    public DateTime? DeletedAt { get; set; }
-    public string?   DeletedBy { get; set; }
+    public bool      IsDeleted   { get; set; }
+    public DateTime? DeletedDate { get; set; }
+    public string?   DeletedBy   { get; set; }
 }
 ```
 
@@ -188,7 +219,7 @@ All services depend on `IUnitOfWork` rather than the concrete `StoreDb`, enablin
 
 ```csharp
 // Transaction boundary
-Task  CompleteAsync(CancellationToken ct = default);
+Task CompleteAsync(CancellationToken ct = default);
 
 // Query — returns IQueryable for LINQ composition
 IQueryable<TEntity> Query<TEntity>() where TEntity : class;
@@ -229,7 +260,7 @@ protected async Task DeleteAsync(TEntity entity, CancellationToken ct = default)
 
 Automatically chooses the correct delete path at runtime:
 
-- Entity implements `ISoftDelete` → sets `IsDeleted = true`, stamps `DeletedAt` / `DeletedBy`, saves. Row retained, hidden by global query filter.
+- Entity implements `ISoftDelete` → sets `IsDeleted = true`, stamps `DeletedDate` / `DeletedBy`, saves. Row retained, hidden by global query filter.
 - Entity does not implement `ISoftDelete` → calls `Remove`, saves. Row permanently deleted.
 
 Adding or removing `ISoftDelete` from an entity type silently changes the delete behaviour with no service code changes.
@@ -267,8 +298,8 @@ PurgeOrderAsync       → Physical DELETE    (permanent, requires prior soft-del
 `SaveChangesInterceptor` that stamps `IAuditable` fields on every save. Registered via `AddInterceptors()` in your concrete `UnitOfWork` subclass — the `UnitOfWork` base class itself has no knowledge of `ICurrentUserService`.
 
 ```
-EntityState.Added    → CreatedAt = UtcNow,  CreatedBy = UserName
-EntityState.Modified → ModifiedAt = UtcNow, ModifiedBy = UserName
+EntityState.Added    → CreatedDate = UtcNow,  CreatedBy = UserName
+EntityState.Modified → ModifiedDate = UtcNow, ModifiedBy = UserName
 ```
 
 Fires on both `SavingChanges` and `SavingChangesAsync`, covering all save paths. Falls back to `"system"` when `ICurrentUserService.UserName` is null.
@@ -281,10 +312,20 @@ Three built-in strategies. Pass a custom `IEntityNamingConvention` implementatio
 
 | Method | Table | Column | FK |
 |---|---|---|---|
-| *(default)* | `Customer` | `OrderDate` | `CustomerId` |
-| `UseSnakeCase()` | `customer` | `order_date` | `customer_id` |
-| `UsePluralizedTables()` | `Customers` | `OrderDate` | `CustomerId` |
+| *(default)* | `Customer` | `OrderDate` | `Customer` |
+| `UseSnakeCase()` | `customer` | `order_date` | `customer` |
+| `UsePluralizedTables()` | `Customers` | `OrderDate` | `Customer` |
 | `UseNamingConvention(custom)` | your choice | your choice | your choice |
+
+FK columns are named after the **navigation property name** — not the type name with an `Id` suffix. This is more expressive when multiple navigations reference the same type:
+
+```
+Withholding.Person      → FK column "Person"
+Withholding.Payee       → FK column "Payee"
+Withholding.OnBehalfOf  → FK column "OnBehalfOf"
+```
+
+Under snake_case these become `person`, `payee`, `on_behalf_of`.
 
 ### Custom naming convention
 
@@ -295,10 +336,10 @@ public class PrefixedNamingConvention : IEntityNamingConvention
     private readonly string _prefix;
     public PrefixedNamingConvention(string prefix) => _prefix = prefix;
 
-    public string GetTableName(Type entityType)                          => $"{_prefix}{entityType.Name}";
-    public string GetColumnName(PropertyInfo property)                   => property.Name;
-    public string GetForeignKeyName(PropertyInfo nav, Type principal)    => $"{nav.Name}Id";
-    public string ApplyToName(string logicalName)                        => logicalName;
+    public string GetTableName(Type entityType)                       => $"{_prefix}{entityType.Name}";
+    public string GetColumnName(PropertyInfo property)                => property.Name;
+    public string GetForeignKeyName(PropertyInfo nav, Type principal) => nav.Name;
+    public string ApplyToName(string logicalName)                     => logicalName;
 }
 
 // Usage:
@@ -315,11 +356,49 @@ Foreign key relationships are inferred automatically from navigation property ty
 
 | Scenario | Detection rule | Result |
 |---|---|---|
-| `int CustomerId` (non-nullable) | FK is non-nullable value type | `IsRequired(true)` |
-| `int? CustomerId` (nullable) | FK is nullable | `IsRequired(false)` |
+| `int PersonId` (non-nullable) | FK scalar is non-nullable value type | `IsRequired(true)` |
+| `int? PersonId` (nullable) | FK scalar is nullable | `IsRequired(false)` |
 | `[Required]` on navigation | Attribute present | `IsRequired(true)` |
-| Bi-directional | Both collection and reference found | `WithOne(inverseName)` |
-| Uni-directional | Collection side only | `WithOne()` |
+| Bi-directional | Both collection and reference found | `WithOne(collectionName)` |
+| Uni-directional | No inverse collection found | `WithOne()` |
+
+### Multiple collections of the same type (new in v2.2)
+
+When a principal entity has multiple collections of the same dependent type, the builder resolves the correct inverse using a `StartsWith` name convention — no attributes or explicit configuration required.
+
+```csharp
+// Withholding has three navigations to Person:
+public class Withholding : IEntity
+{
+    public int Id { get; set; }
+
+    [Required]
+    public Person Person     { get; set; } = null!;  // FK column: Person
+    [Required]
+    public Person Payee      { get; set; } = null!;  // FK column: Payee
+    public Person OnBehalfOf { get; set; } = null!;  // FK column: OnBehalfOf
+}
+
+// Person has three corresponding collections.
+// Name each collection starting with the navigation property name
+// on the dependent side — the builder matches them automatically:
+public class Person : IEntity
+{
+    public int Id { get; set; }
+
+    // "PersonWithholdings".StartsWith("Person")         → Person nav
+    public ICollection<Withholding> PersonWithholdings
+        { get; private set; } = new List<Withholding>();
+
+    // "PayeeWithholdings".StartsWith("Payee")           → Payee nav
+    public ICollection<Withholding> PayeeWithholdings
+        { get; private set; } = new List<Withholding>();
+
+    // "OnBehalfOfWithholdings".StartsWith("OnBehalfOf") → OnBehalfOf nav
+    public ICollection<Withholding> OnBehalfOfWithholdings
+        { get; private set; } = new List<Withholding>();
+}
+```
 
 ---
 
@@ -345,9 +424,9 @@ Column names can be overridden for legacy schemas — the active naming conventi
 ```csharp
 .WithSoftDelete(cols =>
 {
-    cols.IsDeleted = "Archived";
-    cols.DeletedAt = "ArchivedAt";
-    cols.DeletedBy = "ArchivedBy";
+    cols.IsDeleted   = "Archived";
+    cols.DeletedDate = "ArchivedDate";
+    cols.DeletedBy   = "ArchivedBy";
 })
 ```
 
@@ -360,10 +439,10 @@ Column names can be overridden for legacy schemas:
 ```csharp
 .WithAuditFields(cols =>
 {
-    cols.CreatedAt  = "RecordCreatedDate";
-    cols.CreatedBy  = "RecordCreatedUser";
-    cols.ModifiedAt = "RecordModifiedDate";
-    cols.ModifiedBy = "RecordModifiedUser";
+    cols.CreatedDate  = "RecordCreatedDate";
+    cols.CreatedBy    = "RecordCreatedUser";
+    cols.ModifiedDate = "RecordModifiedDate";
+    cols.ModifiedBy   = "RecordModifiedUser";
 })
 ```
 
@@ -421,6 +500,12 @@ public decimal TotalAmount { get; set; }
 // Bare minimum — PascalCase naming, no audit
 EntityConventionBuilder.ForAssemblyOf<Customer>();
 
+// Scan a specific assembly
+EntityConventionBuilder.ForAssembly(typeof(Customer).Assembly);
+
+// Register only specific types — useful for testing or partial registration
+EntityConventionBuilder.ForTypes(typeof(Customer), typeof(Order), typeof(Address));
+
 // PostgreSQL — snake_case
 EntityConventionBuilder.ForAssemblyOf<Customer>().UseSnakeCase();
 
@@ -446,8 +531,19 @@ EntityConventionBuilder
 EntityConventionBuilder
     .ForAssemblyOf<Customer>()
     .UseSnakeCase()
-    .WithAuditFields(cols => { cols.CreatedAt = "RecordCreatedDate"; })
-    .WithSoftDelete(cols => { cols.IsDeleted = "Archived"; });
+    .WithAuditFields(cols =>
+    {
+        cols.CreatedDate  = "RecordCreatedDate";
+        cols.CreatedBy    = "RecordCreatedUser";
+        cols.ModifiedDate = "RecordModifiedDate";
+        cols.ModifiedBy   = "RecordModifiedUser";
+    })
+    .WithSoftDelete(cols =>
+    {
+        cols.IsDeleted   = "Archived";
+        cols.DeletedDate = "ArchivedDate";
+        cols.DeletedBy   = "ArchivedBy";
+    });
 
 // Lazy loading validation enabled
 EntityConventionBuilder
@@ -455,11 +551,6 @@ EntityConventionBuilder
     .UseSnakeCase()
     .WithFullAudit()
     .WithLazyLoadingValidation();
-
-// Scan a specific assembly rather than anchoring on a type
-EntityConventionBuilder
-    .ForAssembly(typeof(Customer).Assembly)
-    .UseSnakeCase();
 ```
 
 ---
@@ -467,8 +558,12 @@ EntityConventionBuilder
 ## Notes
 
 - **EF version**: Targets EF Core 8+. The `HasMany(Type, string)` overload used for non-generic relationship configuration requires EF Core 6 or later.
-- **`base.OnModelCreating` order**: Always call `base.OnModelCreating(modelBuilder)` before `_conventions.Apply(modelBuilder)` in your `UnitOfWork` subclass so the library conventions take precedence.
+- **`base.OnModelCreating` order**: Always call `base.OnModelCreating(modelBuilder)` before `_conventions.Apply(modelBuilder)` in your `UnitOfWork` subclass so the library conventions take precedence over EF Core defaults.
+- **FK column naming**: FK columns are named after the navigation property (`Customer`) not the type with Id suffix (`CustomerId`). EF Core creates a shadow property named `CustomerId` internally — the library renames only the database column to `Customer`.
+- **Multiple collections disambiguation**: When a principal has multiple collections of the same dependent type, name each collection starting with the corresponding navigation property name on the dependent (e.g. `PersonWithholdings` for the `Person` navigation, `PayeeWithholdings` for the `Payee` navigation).
+- **`ForTypes` factory**: Use `EntityConventionBuilder.ForTypes(typeof(A), typeof(B))` when you want to register a specific subset of entities rather than scanning an entire assembly. Useful in tests and in applications with multiple bounded contexts in the same assembly.
 - **Scalar type detection**: The column naming pass recognises `string`, `DateTime`, `DateTimeOffset`, `decimal`, `Guid`, `bool`, and the primitive numeric types, plus their nullable variants. Custom value objects require explicit `IEntityTypeConfiguration<T>` alongside the conventions.
 - **Advanced pluralisation**: The built-in `PluralizedNamingConvention` covers basic English rules. For irregular nouns or non-English domains, implement `IEntityNamingConvention` and use [Humanizer](https://github.com/Humanizr/Humanizer).
 - **Per-entity overrides**: Call `modelBuilder.Entity<T>()` after `_conventions.Apply(modelBuilder)` in `OnModelCreating` to override any convention-generated mapping for a specific entity.
 - **Reserved SQL words**: Some entity names produce reserved SQL keywords as table names (e.g. `Order` → `order` under snake_case). EF Core handles quoting in generated queries automatically, but hand-written SQL must bracket-quote them: `dbo.[order]`.
+- **Services working with multiple entities**: `ServiceBase<TEntity>` sets the primary entity type for delete/restore/purge helpers only. Any service can query and modify multiple entity types freely through `UnitOfWork.Query<T>()` — all changes commit atomically in a single `CompleteAsync` call.

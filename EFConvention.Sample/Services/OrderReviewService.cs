@@ -72,7 +72,7 @@ public sealed class OrderService : ServiceBase<Order>, IOrderService
         await UnitOfWork.Query<Order>()
             .IgnoreQueryFilters()
             .Where(o => o.CustomerId == customerId && o.IsDeleted)
-            .OrderByDescending(o => o.DeletedAt)
+            .OrderByDescending(o => o.DeletedDate)
             .ToListAsync(ct);
 
     public async Task<Order> AddOrderAsync(Order order, CancellationToken ct = default)
@@ -169,7 +169,7 @@ public sealed class ProductReviewService : ServiceBase<ProductReview>, IProductR
         await UnitOfWork.Query<ProductReview>()
             .Include(r => r.Customer)
             .Where(r => r.ProductId == productId)
-            .OrderByDescending(r => r.CreatedAt)
+            .OrderByDescending(r => r.CreatedDate)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<ProductReview>> GetReviewsByCustomerAsync(

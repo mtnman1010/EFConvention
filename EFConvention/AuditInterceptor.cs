@@ -1,15 +1,15 @@
 // =============================================================================
-// EFConventions — Version 2.1
-// Data/AuditInterceptor.cs
+// EFConvention — Version 2.2
+// AuditInterceptor.cs
 //
 // EF Core SaveChangesInterceptor that stamps IAuditable fields before every
 // save. Registered via DbContextOptionsBuilder.AddInterceptors() in the
 // concrete database class (e.g. StoreDb) — UnitOfWork never sees it.
 //
-// Change from v2.0:
-//   ICurrentUserService is now in the EFConventions namespace (library)
-//   rather than EFConventions.Sample (application). The using directive
-//   below is the only change from the v2.0 file.
+// Changes in v2.2:
+//   IAuditable property names updated:
+//     CreatedAt  → CreatedDate
+//     ModifiedAt → ModifiedDate
 // =============================================================================
 
 using Microsoft.EntityFrameworkCore;
@@ -96,12 +96,12 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.CreatedAt  = now;
+                    entry.Entity.CreatedDate  = now;
                     entry.Entity.CreatedBy  = user;
                     break;
 
                 case EntityState.Modified:
-                    entry.Entity.ModifiedAt = now;
+                    entry.Entity.ModifiedDate = now;
                     entry.Entity.ModifiedBy = user;
                     break;
             }
