@@ -11,7 +11,7 @@
 		<PackageId>EFConventionBuilder</PackageId>
 		<Version>2.3.0</Version>
 		<Authors>Jeff Willener</Authors>
-    <Description>Convention-over-configuration for EF Core. Auto-discovers entities, maps tables and columns, wires FK relationships using navigation property names, resolves required/optional via nullable reference types — no scalar FK properties needed. Includes soft delete, audit stamping, unit of work, and service base helpers.</Description>
+    <Description>Convention-over-configuration for EF Core. Auto-discovers entities, maps tables and columns, wires FK relationships using navigation property names, resolves required/optional via nullable reference types with no scalar FK properties needed. Includes soft delete, audit stamping, unit of work, and service base helpers.</Description>
 		<PackageTags>efcore;entityframework;conventions;unitofwork;softdelete;audit</PackageTags>
 		<RepositoryUrl>https://github.com/mtnman1010/EFConvention</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
