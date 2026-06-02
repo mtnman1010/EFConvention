@@ -346,7 +346,7 @@ public class ProductReviewIntegrationTests : StoreDbFixture
     public async Task AddReview_WithCustomer_CanBeRetrievedByCustomerId()
     {
         var review = await _svc.AddReviewAsync(
-            NewReview(_product, customerId: _customer.Id));
+            NewReview(_product, customer: _customer));
 
         var results = await _svc.GetReviewsByCustomerAsync(_customer.Id);
         results.Should().ContainSingle(r => r.Id == review.Id);
@@ -356,17 +356,17 @@ public class ProductReviewIntegrationTests : StoreDbFixture
     public async Task AddReview_WithoutCustomer_IsAnonymous()
     {
         var review = await _svc.AddReviewAsync(
-            NewReview(_product, customerId: null, comment: "Anonymous review"));
+            NewReview(_product, comment: "Anonymous review"));  // customer defaults to null
 
         var anonymous = await _svc.GetReviewsByCustomerAsync(null);
         anonymous.Should().ContainSingle(r => r.Id == review.Id,
-            "reviews with null CustomerId are anonymous");
+            "reviews with null Customer are anonymous");
     }
 
     [Fact]
     public async Task AnonymousReviews_AreNotReturnedForCustomerQuery()
     {
-        await _svc.AddReviewAsync(NewReview(_product, customerId: null));
+        await _svc.AddReviewAsync(NewReview(_product));  // customer defaults to null
 
         var results = await _svc.GetReviewsByCustomerAsync(_customer.Id);
         results.Should().BeEmpty("customer query should not return anonymous reviews");
@@ -400,8 +400,8 @@ public class ProductReviewIntegrationTests : StoreDbFixture
     [Fact]
     public async Task GetReviewsForProduct_ReturnsAllReviews()
     {
-        await _svc.AddReviewAsync(NewReview(_product, customerId: _customer.Id));
-        await _svc.AddReviewAsync(NewReview(_product, customerId: null));
+        await _svc.AddReviewAsync(NewReview(_product, customer: _customer));
+        await _svc.AddReviewAsync(NewReview(_product));  // anonymous — customer defaults to null
 
         var results = await _svc.GetReviewsForProductAsync(_product.Id);
         results.Should().HaveCount(2);

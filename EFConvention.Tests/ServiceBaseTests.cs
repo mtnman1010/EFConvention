@@ -61,28 +61,28 @@ public abstract class ServiceBaseTestBase
 
     protected Order ActiveOrder() => new()
     {
-        Id         = 1,
-        OrderDate  = DateTime.UtcNow,
-        CustomerId = 1,
-        IsDeleted  = false
+        Id = 1,
+        OrderDate = DateTime.UtcNow,
+        Customer = new Customer { Address = new Address() },
+        IsDeleted = false
     };
 
     protected Order SoftDeletedOrder() => new()
     {
-        Id         = 2,
-        OrderDate  = DateTime.UtcNow.AddDays(-5),
-        CustomerId = 1,
-        IsDeleted  = true,
-        DeletedDate  = DateTime.UtcNow.AddDays(-1),
-        DeletedBy  = "admin"
+        Id = 2,
+        OrderDate = DateTime.UtcNow.AddDays(-5),
+        Customer = new Customer { Address = new Address() },
+        IsDeleted = true,
+        DeletedDate = DateTime.UtcNow.AddDays(-1),
+        DeletedBy = "admin"
     };
 
     protected Customer ActiveCustomer() => new()
     {
-        Id        = 1,
-        Name      = "Alice",
-        Email     = "alice@example.com",
-        AddressId = 1
+        Id = 1,
+        Name = "Alice",
+        Email = "alice@example.com",
+        Address = new Address()
     };
 }
 

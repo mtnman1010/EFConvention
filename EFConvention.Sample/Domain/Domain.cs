@@ -1,5 +1,5 @@
 // =============================================================================
-// EFConvention — Version 2.2
+// EFConvention — Version 2.3
 // Domain/Domain.cs
 //
 // Expanded domain model for the StoreDb example. Covers every feature of
@@ -11,25 +11,26 @@
 //   Product       — IAuditable + ISoftDelete, decimal with [Precision]
 //   Order         — IAuditable + ISoftDelete, required FK, private collection
 //   OrderItem     — plain entity, required FKs to both Order and Product
-//   ProductReview — optional FK (nullable CustomerId), IAuditable
+//   ProductReview — optional FK (nullable Customer), IAuditable
 //
 // Navigation property conventions enforced by EntityConventionBuilder:
 //   - Collection properties use 'private set;'  (public setter = startup error)
-//   - Scalar FK properties are non-nullable int  → required relationship
-//   - Scalar FK properties are nullable int?     → optional relationship
+//   - Non-nullable navigation property          → required relationship
+//   - Nullable navigation property              → optional relationship
 //   - [Required] on a navigation also forces required
-//   - [Precision(18,2)] on decimal → applied automatically
+//   - [Precision(18,2)] on decimal              → applied automatically
 //
-// FK column naming (v2.2):
-//   FK columns are named after the navigation property, not the scalar FK
-//   property. AddressId scalar → "Address" database column,
-//   CustomerId scalar → "Customer" database column, etc.
-//   The scalar FK properties (AddressId, CustomerId etc.) still exist on
-//   the C# entity for required/optional detection — only the DB column
-//   name changes.
+// FK column naming (v2.2+):
+//   FK columns are named after the navigation property.
+//   No scalar FK properties (AddressId, CustomerId etc.) needed on domain
+//   objects — EF Core creates shadow properties automatically and the
+//   convention builder renames the database column to the navigation name.
+//
+// Scalar FK properties are still supported for backwards compatibility and
+// for cases where you need to set the FK without loading the navigation
+// (e.g. batch operations). See the Wiki for examples of both styles.
 // =============================================================================
 
-using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 
 namespace EFConvention.Domain;
@@ -81,9 +82,9 @@ public class Category : IEntity
 /// <c>CustomerService.DeleteAsync</c> issues a physical DELETE.
 ///
 /// <para>
-/// <c>AddressId</c> is <c>int</c> (non-nullable) → required relationship.
-/// The convention builder calls <c>.IsRequired(true)</c> automatically.
-/// Database FK column is named <c>Address</c> (navigation property name).
+/// <c>Address</c> is non-nullable → required relationship detected automatically
+/// via nullable reference type annotation. No scalar FK property needed.
+/// DB column named <c>Address</c> (navigation property name).
 /// </para>
 /// </summary>
 public class Customer : IEntity, IAuditable
@@ -93,9 +94,7 @@ public class Customer : IEntity, IAuditable
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
 
-    // Required reference — non-nullable int → required FK
-    // DB column: "Address" (navigation name, not "AddressId")
-    public int AddressId { get; set; }
+    // Non-nullable → required FK, DB column: "Address"
     public Address Address { get; set; } = null!;
 
     // Private setters — encapsulated collections
@@ -128,7 +127,7 @@ public class Customer : IEntity, IAuditable
 ///     <see cref="IAuditable"/> — full audit trail.
 ///   </description></item>
 ///   <item><description>
-///     <c>CategoryId</c> is <c>int</c> (non-nullable) → required FK.
+///     <c>Category</c> is non-nullable → required FK detected automatically.
 ///     DB column named <c>Category</c> (navigation property name).
 ///   </description></item>
 /// </list>
@@ -147,9 +146,7 @@ public class Product : IEntity, IAuditable, ISoftDelete
     [Precision(18, 2)]
     public decimal CostPrice { get; set; }
 
-    // Required FK — non-nullable int
-    // DB column: "Category" (navigation name, not "CategoryId")
-    public int CategoryId { get; set; }
+    // Non-nullable → required FK, DB column: "Category"
     public Category Category { get; set; } = null!;
 
     // Private setters — encapsulated collections
@@ -180,8 +177,7 @@ public class Product : IEntity, IAuditable, ISoftDelete
 ///     audit story: who created, modified, and deleted.
 ///   </description></item>
 ///   <item><description>
-///     <c>[Required]</c> on the <c>Customer</c> navigation — explicitly marks
-///     the relationship as required regardless of FK nullability.
+///     <c>Customer</c> is non-nullable → required FK detected automatically.
 ///     DB column named <c>Customer</c> (navigation property name).
 ///   </description></item>
 ///   <item><description>
@@ -201,10 +197,7 @@ public class Order : IEntity, IAuditable, ISoftDelete
     [Precision(18, 2)]
     public decimal TotalAmount { get; set; }
 
-    // [Required] on navigation — explicitly required regardless of FK type
-    // DB column: "Customer" (navigation name, not "CustomerId")
-    [Required]
-    public int CustomerId { get; set; }
+    // Non-nullable → required FK, DB column: "Customer"
     public Customer Customer { get; set; } = null!;
 
     // Private setter — encapsulated collection
@@ -227,9 +220,9 @@ public class Order : IEntity, IAuditable, ISoftDelete
 // -----------------------------------------------------------------------------
 
 /// <summary>
-/// A line item within an <see cref="Order"/>. Both FK properties are
-/// non-nullable <c>int</c> → both relationships detected as required
-/// automatically. Plain entity — no audit, no soft delete.
+/// A line item within an <see cref="Order"/>. Both navigation properties are
+/// non-nullable → both relationships detected as required automatically via
+/// nullable reference type annotation. Plain entity — no audit, no soft delete.
 /// DB FK columns named <c>Order</c> and <c>Product</c>
 /// (navigation property names).
 /// </summary>
@@ -241,28 +234,25 @@ public class OrderItem : IEntity
     [Precision(18, 2)]
     public decimal UnitPrice { get; set; }
 
-    // Required FK — non-nullable int
-    // DB column: "Order" (navigation name, not "OrderId")
-    public int OrderId { get; set; }
+    // Non-nullable → required FK, DB column: "Order"
     public Order Order { get; set; } = null!;
 
-    // Required FK — non-nullable int
-    // DB column: "Product" (navigation name, not "ProductId")
-    public int ProductId { get; set; }
+    // Non-nullable → required FK, DB column: "Product"
     public Product Product { get; set; } = null!;
 }
 
 // -----------------------------------------------------------------------------
-// ProductReview — optional FK (nullable CustomerId), IAuditable
+// ProductReview — optional FK (nullable Customer), IAuditable
 // -----------------------------------------------------------------------------
 
 /// <summary>
 /// A customer review for a product. Demonstrates an <b>optional</b> FK
-/// relationship: <c>CustomerId</c> is <c>int?</c> (nullable), so the
-/// convention builder calls <c>.IsRequired(false)</c> automatically —
-/// a review can exist even if the customer account is deleted.
-/// DB FK columns named <c>Product</c> (required) and <c>Customer</c>
-/// (optional, nullable). Also implements <see cref="IAuditable"/>.
+/// relationship: <c>Customer</c> is nullable (<c>Customer?</c>), so the
+/// convention builder calls <c>.IsRequired(false)</c> automatically via
+/// nullable reference type annotation — a review can exist even if the
+/// customer account is deleted. Also implements <see cref="IAuditable"/>.
+/// DB FK columns: <c>Product</c> (required, non-nullable) and
+/// <c>Customer</c> (optional, nullable).
 /// </summary>
 public class ProductReview : IEntity, IAuditable
 {
@@ -270,14 +260,10 @@ public class ProductReview : IEntity, IAuditable
     public int Rating { get; set; }   // 1–5
     public string Comment { get; set; } = string.Empty;
 
-    // Required FK — non-nullable int
-    // DB column: "Product" (navigation name, not "ProductId")
-    public int ProductId { get; set; }
+    // Non-nullable → required FK, DB column: "Product"
     public Product Product { get; set; } = null!;
 
-    // Optional FK — nullable int? → IsRequired(false) detected automatically
-    // DB column: "Customer" (navigation name, not "CustomerId")
-    public int? CustomerId { get; set; }
+    // Nullable → optional FK, DB column: "Customer"
     public Customer? Customer { get; set; }
 
     // IAuditable — stamped automatically by AuditInterceptor

@@ -1,16 +1,23 @@
 // =============================================================================
-// EFConvention — Version 2.2
+// EFConvention — Version 2.3
 // EntityConventionBuilder.cs
 //
 // Fluent facade that applies convention-over-configuration to an EF Core
 // ModelBuilder.
 //
+// Changes in v2.3:
+//   [NEW]      Nullable reference type convention for required/optional detection
+//              Non-nullable navigation → required, nullable navigation → optional
+//              Scalar FK properties (CategoryId etc.) no longer required on domain
+//              objects — EF Core shadow properties handle the FK automatically
+//   [REMOVED]  GetCollectionProperties — dead code removed (was unreferenced
+//              after v2.2 relationship refactor)
 // Changes in v2.2:
 //   [BREAKING] FK columns named after navigation property, not type+Id
 //              e.g. Withholding.Person → FK column "Person" (was "PersonId")
 //   [BREAKING] Audit column defaults changed:
-//              CreatedAt → CreateDate, ModifiedAt → ModifyDate
-//              CreatedBy → CreateUser, ModifiedBy → ModifyUser
+//              CreatedAt → CreatedDate, ModifiedAt → ModifiedDate
+//              CreatedBy → CreatedBy,   ModifiedBy → ModifiedBy
 //   [NEW]      GetCollection disambiguation — multiple collections of the same
 //              type resolved by StartsWith convention matching, e.g.
 //              PersonWithholdings → Person nav, PayeeWithholdings → Payee nav
@@ -32,7 +39,12 @@ namespace EFConvention;
 ///   <item><description>Maps scalar column names via the active naming convention.</description></item>
 ///   <item><description>Wires FK relationships using the navigation property name as the FK column name.</description></item>
 ///   <item><description>Resolves multiple collections of the same type using StartsWith name convention.</description></item>
-///   <item><description>Detects required vs optional relationships via <c>[Required]</c> and nullable FK types.</description></item>
+///   <item><description>
+///     Detects required vs optional relationships via <c>[Required]</c>, nullable FK scalar
+///     properties, or nullable reference type annotations — no scalar FK property required.
+///     A non-nullable navigation (<c>Category Category</c>) is required; a nullable navigation
+///     (<c>Category? Category</c>) is optional.
+///   </description></item>
 ///   <item><description>Applies <c>[Precision]</c> attributes to <c>decimal</c> columns automatically.</description></item>
 ///   <item><description>Validates that collection navigation properties have private or no setters.</description></item>
 ///   <item><description>Optionally validates that navigation properties are <c>virtual</c> when lazy loading proxies are enabled.</description></item>
@@ -43,9 +55,18 @@ namespace EFConvention;
 /// </summary>
 /// <example>
 /// <code>
+/// // Minimal domain object — no scalar FK properties needed in v2.3:
+/// public class Product : IEntity
+/// {
+///     public int      Id       { get; set; }
+///     public string   Name     { get; set; } = string.Empty;
+///     public Category Category { get; set; } = null!;  // required — non-nullable
+///     public Supplier? Supplier { get; set; }           // optional — nullable
+/// }
+///
 /// // In UnitOfWork.OnModelCreating:
 /// EntityConventionBuilder
-///     .ForAssemblyOf&lt;Customer&gt;()
+///     .ForAssemblyOf&lt;Product&gt;()
 ///     .UseSnakeCase()
 ///     .WithFullAudit()
 ///     .Apply(modelBuilder);
@@ -259,17 +280,6 @@ public sealed class EntityConventionBuilder
         entityType
             .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .Where(p => p.CanWrite && allEntityTypes.Contains(p.PropertyType));
-
-    /// <summary>
-    /// Returns directly-declared collection navigation properties
-    /// (ICollection/List/IList of a known entity type). Uses DeclaredOnly
-    /// to prevent re-configuring inherited collections on subclasses.
-    /// </summary>
-    private static IEnumerable<PropertyInfo> GetCollectionProperties(
-        Type entityType, IReadOnlyList<Type> allEntityTypes) =>
-        entityType
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(p => IsCollectionOfEntity(p.PropertyType, allEntityTypes, out _));
 
     /// <summary>
     /// Finds the inverse collection on the principal for a given reference
@@ -540,20 +550,60 @@ public sealed class EntityConventionBuilder
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// A navigation is required when either:
-    /// (a) the navigation property carries <c>[Required]</c>, or
-    /// (b) the corresponding FK scalar property is a non-nullable value type.
+    /// Determines whether a navigation relationship is required or optional
+    /// using a three-step priority chain:
+    ///
+    /// <list type="number">
+    ///   <item><description>
+    ///     <c>[Required]</c> attribute on the navigation property → always required.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Scalar FK property nullability (backwards-compatible) — if a scalar FK
+    ///     property exists (e.g. <c>CategoryId</c>), its nullability determines
+    ///     required vs optional. Non-nullable <c>int</c> → required;
+    ///     nullable <c>int?</c> → optional.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Nullable reference type annotation (new in v2.3) — when no scalar FK
+    ///     property exists, the nullability of the navigation property itself
+    ///     determines required vs optional. Non-nullable <c>Category Category</c>
+    ///     → required; nullable <c>Category? Category</c> → optional.
+    ///     Requires <c>&lt;Nullable&gt;enable&lt;/Nullable&gt;</c> in the project file.
+    ///   </description></item>
+    /// </list>
+    ///
+    /// <para>
+    /// This means scalar FK properties are no longer required on domain objects.
+    /// The cleanest v2.3 domain style omits them entirely:
+    /// <code>
+    /// public class Product : IEntity
+    /// {
+    ///     public int      Id       { get; set; }
+    ///     public string   Name     { get; set; } = string.Empty;
+    ///     public Category Category { get; set; } = null!;  // required
+    ///     public Supplier? Supplier { get; set; }           // optional
+    /// }
+    /// </code>
+    /// Scalar FK properties are still supported for backwards compatibility and
+    /// for cases where you need to set the FK without loading the navigation.
+    /// </para>
     /// </summary>
     private static bool IsRequiredNavigation(PropertyInfo navProp, PropertyInfo? fkProp)
     {
+        // Step 1 — [Required] attribute always wins
         if (navProp.GetCustomAttributes<RequiredAttribute>(inherit: true).Any())
             return true;
 
+        // Step 2 — scalar FK property nullability (backwards-compatible)
         if (fkProp != null)
             return fkProp.PropertyType.IsValueType &&
                    Nullable.GetUnderlyingType(fkProp.PropertyType) == null;
 
-        return false;
+        // Step 3 — nullable reference type annotation (v2.3)
+        // Non-nullable navigation → required; nullable navigation → optional
+        // Requires <Nullable>enable</Nullable> in the project file
+        var nullabilityInfo = new NullabilityInfoContext().Create(navProp);
+        return nullabilityInfo.WriteState == NullabilityState.NotNull;
     }
 
     /// <summary>
