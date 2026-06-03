@@ -773,3 +773,13 @@ EntityConventionBuilder
 - **Reserved SQL words**: `Order` → `[Order]` under PascalCase, `order` → `[order]` under snake_case in hand-written SQL.
 - **Services working with multiple entities**: `ServiceBase<TEntity>` sets the primary entity type for delete/restore/purge only. Services can freely query and modify any entity type through `UnitOfWork.Query<T>()` — all changes commit atomically in a single `CompleteAsync` call.
 - **`ICurrentUserService` vs assembly anchor**: The assembly anchor (`typeof(Customer).Assembly`) and `ICurrentUserService` are completely independent. The anchor tells the builder where to find domain entities. `ICurrentUserService` provides user identity for audit stamping. Neither requires the other.
+
+---
+
+## Links
+
+- **NuGet**: [nuget.org/packages/EFConventionBuilder](https://nuget.org/packages/EFConventionBuilder)
+- **Source**: [github.com/mtnman1010/EFConventionBuilder](https://github.com/mtnman1010/EFConventionBuilder)
+- **Issues**: [github.com/mtnman1010/EFConventionBuilder/issues](https://github.com/mtnman1010/EFConventionBuilder/issues)
+- **Wiki**: [github.com/mtnman1010/EFConventionBuilder/wiki](https://github.com/mtnman1010/EFConventionBuilder/wiki)
+- **License**: MIT
