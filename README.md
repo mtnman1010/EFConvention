@@ -2,7 +2,7 @@
 [![NuGet Downloads](https://img.shields.io/nuget/dt/EFConventionBuilder)](https://nuget.org/packages/EFConventionBuilder)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-# EFConvention
+# EFConventionBuilder
 
 **NuGet:** `dotnet add package EFConventionBuilder`
 
