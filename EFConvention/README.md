@@ -4,6 +4,64 @@ A lightweight EF Core convention-over-configuration library. Drop it into any pr
 
 ---
 
+## Breaking changes
+
+### Upgrading from v2.1 to v2.3
+
+**Property renames (v2.2):**
+
+| v2.1 | v2.2+ | Where |
+|---|---|---|
+| `IAuditable.CreatedAt` | `IAuditable.CreatedDate` | Interface + domain entities |
+| `IAuditable.ModifiedAt` | `IAuditable.ModifiedDate` | Interface + domain entities |
+| `ISoftDelete.DeletedAt` | `ISoftDelete.DeletedDate` | Interface + domain entities |
+| `AuditColumnNames.CreatedAt` | `AuditColumnNames.CreatedDate` | Builder configuration |
+| `AuditColumnNames.ModifiedAt` | `AuditColumnNames.ModifiedDate` | Builder configuration |
+| `SoftDeleteColumnNames.DeletedAt` | `SoftDeleteColumnNames.DeletedDate` | Builder configuration |
+
+**Default column names (v2.2):**
+
+| Property | v2.1 default | v2.2+ default |
+|---|---|---|
+| `CreatedDate` | `CreatedAt` | `CreatedDate` |
+| `CreatedBy` | `CreatedBy` | `CreatedBy` |
+| `ModifiedDate` | `ModifiedAt` | `ModifiedDate` |
+| `ModifiedBy` | `ModifiedBy` | `ModifiedBy` |
+| `DeletedDate` | `DeletedAt` | `DeletedDate` |
+| `DeletedBy` | `DeletedBy` | `DeletedBy` |
+
+**FK column naming (v2.2):**
+
+FK columns are now named after the navigation property (`Customer`) rather than the type with Id suffix (`CustomerId`). Update any hand-written SQL scripts that reference FK column names.
+
+**Scalar FK properties (v2.3):**
+
+Scalar FK properties (`AddressId`, `CustomerId`, `CategoryId` etc.) are no longer required on domain objects. Required/optional relationships are now detected via nullable reference type annotations:
+
+```csharp
+// v2.1 — scalar FK required
+public int     AddressId { get; set; }
+public Address Address   { get; set; } = null!;
+
+// v2.3 — scalar FK optional, nullability drives required/optional
+public Address  Address  { get; set; } = null!;  // non-nullable → required
+public Address? Address  { get; set; }            // nullable    → optional
+```
+
+Scalar FK properties are still supported for backwards compatibility. Remove them gradually or leave them in place — both work correctly.
+
+**New in v2.2:**
+- FK columns named after navigation property (`Customer` not `CustomerId`)
+- Multiple collections of the same type resolved by `StartsWith` name convention
+- `ForTypes(params Type[] types)` factory method
+
+**New in v2.3:**
+- Nullable reference type convention for required/optional detection — no scalar FK properties needed
+- `GetCollectionProperties` dead code removed
+- `IsCollectionPropertyOf` dead code removed
+
+---
+
 ## What's in the library
 
 | File | Purpose |
@@ -25,7 +83,7 @@ A lightweight EF Core convention-over-configuration library. Drop it into any pr
 
 ### 1. Implement `IEntity` on your domain objects
 
-All classes implementing `IEntityBase` or `IEntity` are discovered automatically. No base class inheritance required.
+All classes implementing `IEntityBase` or `IEntity` are discovered automatically. No base class inheritance required. Scalar FK properties are optional — required/optional detection uses nullable reference type annotations.
 
 ```csharp
 public class Customer : IEntity, IAuditable
@@ -34,45 +92,69 @@ public class Customer : IEntity, IAuditable
     public string Name  { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
 
-    // Required FK — non-nullable int detected automatically
-    public int     AddressId { get; set; }
-    public Address Address   { get; set; } = null!;
+    // Non-nullable → required FK, DB column: "Address"
+    public Address Address { get; set; } = null!;
 
     // Private setter — enforced by startup validation
     public ICollection<Order> Orders { get; private set; } = new List<Order>();
 
     // IAuditable — stamped automatically by AuditInterceptor
-    public DateTime  CreatedAt  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public DateTime  CreatedDate  { get; set; }
+    public string    CreatedBy    { get; set; } = string.Empty;
+    public DateTime? ModifiedDate { get; set; }
+    public string?   ModifiedBy   { get; set; }
 }
 
 public class Order : IEntity, IAuditable, ISoftDelete
 {
-    public int      Id         { get; set; }
-    public DateTime OrderDate  { get; set; }
-    public int      CustomerId { get; set; }
-    public Customer Customer   { get; set; } = null!;
+    public int      Id          { get; set; }
+    public DateTime OrderDate   { get; set; }
+    public string   Status      { get; set; } = "Pending";
 
+    [Precision(18, 2)]
+    public decimal TotalAmount { get; set; }
+
+    // Non-nullable → required FK, DB column: "Customer"
+    public Customer Customer { get; set; } = null!;
+
+    // Private setter — enforced by startup validation
     public ICollection<OrderItem> Items { get; private set; } = new List<OrderItem>();
 
     // IAuditable
-    public DateTime  CreatedAt  { get; set; }
-    public string    CreatedBy  { get; set; } = string.Empty;
-    public DateTime? ModifiedAt { get; set; }
-    public string?   ModifiedBy { get; set; }
+    public DateTime  CreatedDate  { get; set; }
+    public string    CreatedBy    { get; set; } = string.Empty;
+    public DateTime? ModifiedDate { get; set; }
+    public string?   ModifiedBy   { get; set; }
 
     // ISoftDelete
-    public bool      IsDeleted { get; set; }
-    public DateTime? DeletedAt { get; set; }
-    public string?   DeletedBy { get; set; }
+    public bool      IsDeleted   { get; set; }
+    public DateTime? DeletedDate { get; set; }
+    public string?   DeletedBy   { get; set; }
+}
+
+// Optional FK — nullable navigation property
+public class ProductReview : IEntity, IAuditable
+{
+    public int    Id      { get; set; }
+    public int    Rating  { get; set; }
+    public string Comment { get; set; } = string.Empty;
+
+    // Non-nullable → required FK
+    public Product Product { get; set; } = null!;
+
+    // Nullable → optional FK — review survives customer deletion
+    public Customer? Customer { get; set; }
+
+    public DateTime  CreatedDate  { get; set; }
+    public string    CreatedBy    { get; set; } = string.Empty;
+    public DateTime? ModifiedDate { get; set; }
+    public string?   ModifiedBy   { get; set; }
 }
 ```
 
 ### 2. Implement `ICurrentUserService`
 
-Defined in the library — implement it once in your application:
+Defined in the library — implement it once in your application. Only required when using audit stamping via `WithAuditFields()` or `WithFullAudit()`.
 
 ```csharp
 // ASP.NET Core web app
@@ -91,6 +173,8 @@ public class SystemUserService : ICurrentUserService
 }
 ```
 
+See [ICurrentUserService — hosting environments](#icurrentuserservice--hosting-environments) for implementations covering WPF, Blazor, JWT, Windows auth, and more.
+
 ### 3. Subclass `UnitOfWork`
 
 ```csharp
@@ -99,10 +183,12 @@ public sealed class StoreDb : UnitOfWork
     private readonly string _connectionString;
     private readonly AuditInterceptor _auditInterceptor;
 
+    // typeof(Customer) is just an assembly scan anchor —
+    // any domain type works. Unrelated to ICurrentUserService.
     public StoreDb(string connectionString, ICurrentUserService currentUser)
         : base(
             domainAssembly:       typeof(Customer).Assembly,
-            configureConventions: b => b.UseSnakeCase().WithFullAudit())
+            configureConventions: b => b.WithFullAudit())
     {
         _connectionString = connectionString;
         _auditInterceptor = new AuditInterceptor(currentUser);
@@ -114,6 +200,27 @@ public sealed class StoreDb : UnitOfWork
             options
                 .UseSqlServer(_connectionString)
                 .AddInterceptors(_auditInterceptor);
+    }
+}
+
+// No audit stamping needed — ICurrentUserService not required
+public sealed class SimpleDb : UnitOfWork
+{
+    private readonly string _connectionString;
+
+    public SimpleDb(string connectionString)
+        : base(
+            domainAssembly:       typeof(Product).Assembly,
+            configureConventions: b => b.UseSnakeCase())  // no WithAuditFields
+    {
+        _connectionString = connectionString;
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options)
+    {
+        if (!options.IsConfigured)
+            options.UseSqlServer(_connectionString);
+        // No AddInterceptors needed
     }
 }
 ```
@@ -131,6 +238,13 @@ public sealed class OrderService : ServiceBase<Order>, IOrderService
             .Include(o => o.Customer)
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == id, ct);
+
+    public async Task<IReadOnlyList<Order>> GetOrdersByCustomerAsync(
+        int customerId, CancellationToken ct = default) =>
+        await UnitOfWork.Query<Order>()
+            .Where(o => o.Customer.Id == customerId)  // navigate through Customer
+            .OrderByDescending(o => o.OrderDate)
+            .ToListAsync(ct);
 
     public async Task DeleteOrderAsync(int id, CancellationToken ct = default)
     {
@@ -165,6 +279,26 @@ public sealed class OrderService : ServiceBase<Order>, IOrderService
 }
 ```
 
+**Querying optional FK navigations in LINQ:**
+
+```csharp
+// Optional FK — guard against null before accessing properties
+// EF Core translates this to efficient SQL automatically
+public async Task<IReadOnlyList<ProductReview>> GetReviewsByCustomerAsync(
+    int? customerId, CancellationToken ct = default)
+{
+    var query = UnitOfWork.Query<ProductReview>().Include(r => r.Product);
+
+    return customerId.HasValue
+        ? await query
+            .Where(r => r.Customer != null && r.Customer.Id == customerId)
+            .ToListAsync(ct)
+        : await query
+            .Where(r => r.Customer == null)
+            .ToListAsync(ct);
+}
+```
+
 ### 5. Register with DI
 
 ```csharp
@@ -182,13 +316,150 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 ---
 
+## ICurrentUserService — hosting environments
+
+`ICurrentUserService` is only required when audit stamping is enabled via `WithAuditFields()` or `WithFullAudit()`. If you don't use audit stamping, you never need to implement or register it. The assembly anchor (`typeof(Customer).Assembly`) is completely unrelated to identity — it just tells the builder which assembly to scan for domain entities.
+
+### ASP.NET Core MVC or Razor Pages
+
+```csharp
+public class HttpContextCurrentUserService : ICurrentUserService
+{
+    private readonly IHttpContextAccessor _accessor;
+    public HttpContextCurrentUserService(IHttpContextAccessor accessor)
+        => _accessor = accessor;
+    public string? UserName => _accessor.HttpContext?.User?.Identity?.Name;
+}
+
+// Program.cs
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
+```
+
+### ASP.NET Core Web API with JWT
+
+```csharp
+public class JwtCurrentUserService : ICurrentUserService
+{
+    private readonly IHttpContextAccessor _accessor;
+    public JwtCurrentUserService(IHttpContextAccessor accessor)
+        => _accessor = accessor;
+    public string? UserName =>
+        _accessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? _accessor.HttpContext?.User?.FindFirst("sub")?.Value;
+}
+
+// Program.cs
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, JwtCurrentUserService>();
+```
+
+### Blazor Server
+
+```csharp
+public class BlazorCurrentUserService : ICurrentUserService
+{
+    private readonly AuthenticationStateProvider _authState;
+    public BlazorCurrentUserService(AuthenticationStateProvider authState)
+        => _authState = authState;
+
+    public string? UserName
+    {
+        get
+        {
+            var state = _authState.GetAuthenticationStateAsync().GetAwaiter().GetResult();
+            return state.User?.Identity?.Name;
+        }
+    }
+}
+
+// Program.cs
+builder.Services.AddScoped<ICurrentUserService, BlazorCurrentUserService>();
+```
+
+### WPF / WinForms / MVVM desktop app
+
+```csharp
+// Option 1 — Windows authentication (domain-joined apps)
+public class WindowsCurrentUserService : ICurrentUserService
+{
+    public string? UserName =>
+        System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+}
+
+// Option 2 — custom login session
+public class SessionCurrentUserService : ICurrentUserService
+{
+    private readonly ISessionService _session;
+    public SessionCurrentUserService(ISessionService session)
+        => _session = session;
+    public string? UserName => _session.CurrentUser?.Username;
+}
+```
+
+### Background jobs and hosted services
+
+```csharp
+public class SystemUserService : ICurrentUserService
+{
+    public string? UserName => "system";
+}
+
+// Program.cs
+services.AddScoped<ICurrentUserService, SystemUserService>();
+```
+
+### Console apps and CLI tools
+
+```csharp
+public class ConsoleCurrentUserService : ICurrentUserService
+{
+    public string? UserName { get; }
+    public ConsoleCurrentUserService(string userName) => UserName = userName;
+}
+
+// Program.cs
+var userName = args.FirstOrDefault() ?? Environment.UserName;
+services.AddSingleton<ICurrentUserService>(new ConsoleCurrentUserService(userName));
+```
+
+### Unit tests
+
+```csharp
+public class FixedUserService : ICurrentUserService
+{
+    public string? UserName { get; }
+    public FixedUserService(string name = "test-user") => UserName = name;
+}
+```
+
+### No audit stamping needed
+
+Don't call `WithAuditFields()` or `WithFullAudit()`. `ICurrentUserService` is never referenced and does not need to be registered:
+
+```csharp
+public sealed class SimpleDb : UnitOfWork
+{
+    public SimpleDb(string connectionString)
+        : base(
+            domainAssembly:       typeof(Product).Assembly,
+            configureConventions: b => b.UseSnakeCase())  // no WithAuditFields
+    { ... }
+}
+
+// DI — no ICurrentUserService needed
+services.AddScoped<IUnitOfWork>(sp => new SimpleDb(connectionString));
+```
+
+---
+
 ## IUnitOfWork
 
 All services depend on `IUnitOfWork` rather than the concrete `StoreDb`, enabling clean unit tests with a mock. The interface exposes:
 
 ```csharp
 // Transaction boundary
-Task  CompleteAsync(CancellationToken ct = default);
+Task CompleteAsync(CancellationToken ct = default);
 
 // Query — returns IQueryable for LINQ composition
 IQueryable<TEntity> Query<TEntity>() where TEntity : class;
@@ -223,32 +494,18 @@ Abstract base for all application services. Provides three protected helpers:
 
 ### `DeleteAsync` — runtime soft/hard delete detection
 
-```csharp
-protected async Task DeleteAsync(TEntity entity, CancellationToken ct = default)
-```
-
 Automatically chooses the correct delete path at runtime:
 
-- Entity implements `ISoftDelete` → sets `IsDeleted = true`, stamps `DeletedAt` / `DeletedBy`, saves. Row retained, hidden by global query filter.
+- Entity implements `ISoftDelete` → sets `IsDeleted = true`, stamps `DeletedDate` / `DeletedBy`, saves. Row retained, hidden by global query filter.
 - Entity does not implement `ISoftDelete` → calls `Remove`, saves. Row permanently deleted.
 
-Adding or removing `ISoftDelete` from an entity type silently changes the delete behaviour with no service code changes.
-
 ### `RestoreAsync` — reverse a soft delete
-
-```csharp
-protected async Task RestoreAsync(TEntity entity, CancellationToken ct = default)
-```
 
 Clears all `ISoftDelete` fields, making the row visible to normal queries again. Throws `InvalidOperationException` if the entity does not implement `ISoftDelete`.
 
 ### `PurgeAsync` — permanent removal after soft delete
 
-```csharp
-protected async Task PurgeAsync(TEntity entity, CancellationToken ct = default)
-```
-
-Permanently removes a soft-deleted row. Enforces a two-step pattern — the entity must already be soft-deleted. Throws `InvalidOperationException` if the entity is still active or does not implement `ISoftDelete`.
+Permanently removes a soft-deleted row. Enforces a two-step pattern — the entity must already be soft-deleted.
 
 ### Soft delete lifecycle
 
@@ -264,14 +521,14 @@ PurgeOrderAsync       → Physical DELETE    (permanent, requires prior soft-del
 
 ## AuditInterceptor
 
-`SaveChangesInterceptor` that stamps `IAuditable` fields on every save. Registered via `AddInterceptors()` in your concrete `UnitOfWork` subclass — the `UnitOfWork` base class itself has no knowledge of `ICurrentUserService`.
+`SaveChangesInterceptor` that stamps `IAuditable` fields on every save. Registered via `AddInterceptors()` in your concrete `UnitOfWork` subclass.
 
 ```
-EntityState.Added    → CreatedAt = UtcNow,  CreatedBy = UserName
-EntityState.Modified → ModifiedAt = UtcNow, ModifiedBy = UserName
+EntityState.Added    → CreatedDate = UtcNow,  CreatedBy = UserName
+EntityState.Modified → ModifiedDate = UtcNow, ModifiedBy = UserName
 ```
 
-Fires on both `SavingChanges` and `SavingChangesAsync`, covering all save paths. Falls back to `"system"` when `ICurrentUserService.UserName` is null.
+Falls back to `"system"` when `ICurrentUserService.UserName` is null.
 
 ---
 
@@ -281,89 +538,115 @@ Three built-in strategies. Pass a custom `IEntityNamingConvention` implementatio
 
 | Method | Table | Column | FK |
 |---|---|---|---|
-| *(default)* | `Customer` | `OrderDate` | `CustomerId` |
-| `UseSnakeCase()` | `customer` | `order_date` | `customer_id` |
-| `UsePluralizedTables()` | `Customers` | `OrderDate` | `CustomerId` |
+| *(default)* | `Customer` | `OrderDate` | `Customer` |
+| `UseSnakeCase()` | `customer` | `order_date` | `customer` |
+| `UsePluralizedTables()` | `Customers` | `OrderDate` | `Customer` |
 | `UseNamingConvention(custom)` | your choice | your choice | your choice |
+
+FK columns are named after the **navigation property name** — not the type name with an `Id` suffix:
+
+```
+Order.Customer      → FK column "Customer"
+Order.Payee         → FK column "Payee"
+Order.OnBehalfOf    → FK column "OnBehalfOf"
+```
 
 ### Custom naming convention
 
 ```csharp
-// Example: prefixed tables → tbl_Customer, tbl_Order
 public class PrefixedNamingConvention : IEntityNamingConvention
 {
     private readonly string _prefix;
     public PrefixedNamingConvention(string prefix) => _prefix = prefix;
 
-    public string GetTableName(Type entityType)                          => $"{_prefix}{entityType.Name}";
-    public string GetColumnName(PropertyInfo property)                   => property.Name;
-    public string GetForeignKeyName(PropertyInfo nav, Type principal)    => $"{nav.Name}Id";
-    public string ApplyToName(string logicalName)                        => logicalName;
+    public string GetTableName(Type entityType)                       => $"{_prefix}{entityType.Name}";
+    public string GetColumnName(PropertyInfo property)                => property.Name;
+    public string GetForeignKeyName(PropertyInfo nav, Type principal) => nav.Name;
+    public string ApplyToName(string logicalName)                     => logicalName;
 }
-
-// Usage:
-EntityConventionBuilder
-    .ForAssemblyOf<Customer>()
-    .UseNamingConvention(new PrefixedNamingConvention("tbl_"));
 ```
 
 ---
 
 ## Relationship detection
 
-Foreign key relationships are inferred automatically from navigation property types and FK scalar property nullability.
+Required/optional detection uses a three-step priority chain:
 
-| Scenario | Detection rule | Result |
+| Priority | Condition | Result |
 |---|---|---|
-| `int CustomerId` (non-nullable) | FK is non-nullable value type | `IsRequired(true)` |
-| `int? CustomerId` (nullable) | FK is nullable | `IsRequired(false)` |
-| `[Required]` on navigation | Attribute present | `IsRequired(true)` |
-| Bi-directional | Both collection and reference found | `WithOne(inverseName)` |
-| Uni-directional | Collection side only | `WithOne()` |
+| 1 | `[Required]` attribute on navigation | `IsRequired(true)` |
+| 2 | Scalar FK property `int` (non-nullable) | `IsRequired(true)` |
+| 2 | Scalar FK property `int?` (nullable) | `IsRequired(false)` |
+| 3 | Non-nullable navigation `Address Address` | `IsRequired(true)` |
+| 3 | Nullable navigation `Address? Address` | `IsRequired(false)` |
+
+Scalar FK properties are optional in v2.3 — nullable reference type annotations drive required/optional detection when no scalar FK exists.
+
+### Multiple collections of the same type (v2.2+)
+
+When a principal entity has multiple collections of the same dependent type, the builder resolves the correct inverse using a `StartsWith` name convention:
+
+```csharp
+public class Withholding : IEntity
+{
+    public int Id { get; set; }
+
+    public Person  Person     { get; set; } = null!;  // required — non-nullable
+    public Person  Payee      { get; set; } = null!;  // required — non-nullable
+    public Person? OnBehalfOf { get; set; }            // optional — nullable
+}
+
+public class Person : IEntity
+{
+    public int Id { get; set; }
+
+    // "PersonWithholdings".StartsWith("Person")         → Person nav
+    public ICollection<Withholding> PersonWithholdings
+        { get; private set; } = new List<Withholding>();
+
+    // "PayeeWithholdings".StartsWith("Payee")           → Payee nav
+    public ICollection<Withholding> PayeeWithholdings
+        { get; private set; } = new List<Withholding>();
+
+    // "OnBehalfOfWithholdings".StartsWith("OnBehalfOf") → OnBehalfOf nav
+    public ICollection<Withholding> OnBehalfOfWithholdings
+        { get; private set; } = new List<Withholding>();
+}
+```
 
 ---
 
 ## Optional behaviours
 
-Both features are opt-in. The builder flag and the entity interface must both be present for the behaviour to apply.
-
 ### Soft delete — `WithSoftDelete()`
 
-Entities implementing `ISoftDelete` receive an automatic global query filter (`WHERE IsDeleted = 0`). Deleted rows are never returned without an explicit `IgnoreQueryFilters()` call.
-
-To query deleted rows:
+Entities implementing `ISoftDelete` receive an automatic global query filter (`WHERE IsDeleted = 0`).
 
 ```csharp
+// Query deleted rows
 var deletedOrders = await unitOfWork.Query<Order>()
     .IgnoreQueryFilters()
     .Where(o => o.IsDeleted)
     .ToListAsync();
-```
 
-Column names can be overridden for legacy schemas — the active naming convention is still applied on top:
-
-```csharp
+// Override column names for legacy schemas
 .WithSoftDelete(cols =>
 {
-    cols.IsDeleted = "Archived";
-    cols.DeletedAt = "ArchivedAt";
-    cols.DeletedBy = "ArchivedBy";
+    cols.IsDeleted   = "Archived";
+    cols.DeletedDate = "ArchivedDate";
+    cols.DeletedBy   = "ArchivedBy";
 })
 ```
 
 ### Audit fields — `WithAuditFields()`
 
-Entities implementing `IAuditable` are automatically stamped by `AuditInterceptor` on every save. Requires `ICurrentUserService` in DI.
-
-Column names can be overridden for legacy schemas:
-
 ```csharp
 .WithAuditFields(cols =>
 {
-    cols.CreatedAt  = "RecordCreatedDate";
-    cols.CreatedBy  = "RecordCreatedUser";
-    cols.ModifiedAt = "RecordModifiedDate";
-    cols.ModifiedBy = "RecordModifiedUser";
+    cols.CreatedDate  = "RecordCreatedDate";
+    cols.CreatedBy    = "RecordCreatedUser";
+    cols.ModifiedDate = "RecordModifiedDate";
+    cols.ModifiedBy   = "RecordModifiedUser";
 })
 ```
 
@@ -384,7 +667,7 @@ Equivalent to `.WithSoftDelete().WithAuditFields()`.
 
 ## Startup validation
 
-`EntityConventionBuilder.Apply()` validates the domain model at startup and throws `InvalidOperationException` listing all problems together if any are found:
+`EntityConventionBuilder.Apply()` validates the domain model at startup and throws `InvalidOperationException` listing all problems together:
 
 ```
 EFConvention — 2 configuration error(s) detected:
@@ -394,23 +677,13 @@ EFConvention — 2 configuration error(s) detected:
      navigation properties.
 ```
 
-Validated automatically:
-
-- Collection navigation properties must have `private set;` or no setter
-- When `WithLazyLoadingValidation()` is enabled, all navigation properties must be `virtual`
-
 ---
 
 ## Decimal precision
 
-`[Precision(18, 2)]` attributes on `decimal` properties are picked up automatically — no explicit fluent configuration required:
-
 ```csharp
 [Precision(18, 2)]
 public decimal Price { get; set; }
-
-[Precision(18, 2)]
-public decimal TotalAmount { get; set; }
 ```
 
 ---
@@ -420,6 +693,12 @@ public decimal TotalAmount { get; set; }
 ```csharp
 // Bare minimum — PascalCase naming, no audit
 EntityConventionBuilder.ForAssemblyOf<Customer>();
+
+// Scan a specific assembly
+EntityConventionBuilder.ForAssembly(typeof(Customer).Assembly);
+
+// Register only specific types — useful for testing or partial registration
+EntityConventionBuilder.ForTypes(typeof(Customer), typeof(Order), typeof(Address));
 
 // PostgreSQL — snake_case
 EntityConventionBuilder.ForAssemblyOf<Customer>().UseSnakeCase();
@@ -433,7 +712,10 @@ EntityConventionBuilder.ForAssemblyOf<Customer>().WithSoftDelete();
 // Audit stamping only
 EntityConventionBuilder.ForAssemblyOf<Customer>().WithAuditFields();
 
-// snake_case + full audit (most common)
+// PascalCase + full audit (default convention — SQL Server)
+EntityConventionBuilder.ForAssemblyOf<Customer>().WithFullAudit();
+
+// snake_case + full audit (PostgreSQL)
 EntityConventionBuilder.ForAssemblyOf<Customer>().UseSnakeCase().WithFullAudit();
 
 // Custom naming + full audit
@@ -446,29 +728,42 @@ EntityConventionBuilder
 EntityConventionBuilder
     .ForAssemblyOf<Customer>()
     .UseSnakeCase()
-    .WithAuditFields(cols => { cols.CreatedAt = "RecordCreatedDate"; })
-    .WithSoftDelete(cols => { cols.IsDeleted = "Archived"; });
+    .WithAuditFields(cols =>
+    {
+        cols.CreatedDate  = "RecordCreatedDate";
+        cols.CreatedBy    = "RecordCreatedUser";
+        cols.ModifiedDate = "RecordModifiedDate";
+        cols.ModifiedBy   = "RecordModifiedUser";
+    })
+    .WithSoftDelete(cols =>
+    {
+        cols.IsDeleted   = "Archived";
+        cols.DeletedDate = "ArchivedDate";
+        cols.DeletedBy   = "ArchivedBy";
+    });
 
 // Lazy loading validation enabled
 EntityConventionBuilder
     .ForAssemblyOf<Customer>()
-    .UseSnakeCase()
     .WithFullAudit()
     .WithLazyLoadingValidation();
-
-// Scan a specific assembly rather than anchoring on a type
-EntityConventionBuilder
-    .ForAssembly(typeof(Customer).Assembly)
-    .UseSnakeCase();
 ```
 
 ---
 
 ## Notes
 
-- **EF version**: Targets EF Core 8+. The `HasMany(Type, string)` overload used for non-generic relationship configuration requires EF Core 6 or later.
-- **`base.OnModelCreating` order**: Always call `base.OnModelCreating(modelBuilder)` before `_conventions.Apply(modelBuilder)` in your `UnitOfWork` subclass so the library conventions take precedence.
-- **Scalar type detection**: The column naming pass recognises `string`, `DateTime`, `DateTimeOffset`, `decimal`, `Guid`, `bool`, and the primitive numeric types, plus their nullable variants. Custom value objects require explicit `IEntityTypeConfiguration<T>` alongside the conventions.
-- **Advanced pluralisation**: The built-in `PluralizedNamingConvention` covers basic English rules. For irregular nouns or non-English domains, implement `IEntityNamingConvention` and use [Humanizer](https://github.com/Humanizr/Humanizer).
-- **Per-entity overrides**: Call `modelBuilder.Entity<T>()` after `_conventions.Apply(modelBuilder)` in `OnModelCreating` to override any convention-generated mapping for a specific entity.
-- **Reserved SQL words**: Some entity names produce reserved SQL keywords as table names (e.g. `Order` → `order` under snake_case). EF Core handles quoting in generated queries automatically, but hand-written SQL must bracket-quote them: `dbo.[order]`.
+- **EF version**: Targets EF Core 8+.
+- **Nullable reference types**: Requires `<Nullable>enable</Nullable>` in your project file for the v2.3 nullable navigation convention to work correctly. Without it all navigations are treated as optional.
+- **`base.OnModelCreating` order**: Always call `base.OnModelCreating(modelBuilder)` before `_conventions.Apply(modelBuilder)` in your `UnitOfWork` subclass so the library conventions take precedence over EF Core defaults.
+- **Scalar FK properties**: Optional in v2.3. Keep them if you need to set the FK without loading the navigation (e.g. `order.CustomerId = 5` without loading `Customer`). Remove them for cleaner domain objects.
+- **FK column naming**: FK columns are named after the navigation property (`Customer`) not the type with Id suffix (`CustomerId`). EF Core creates a shadow property internally — the library renames only the database column.
+- **Querying optional navigations in LINQ**: Guard against null before accessing properties — `r.Customer != null && r.Customer.Id == id`. EF Core translates this to efficient SQL automatically.
+- **Multiple collections disambiguation**: Name each collection starting with the corresponding navigation property name on the dependent — e.g. `PersonWithholdings` for the `Person` navigation.
+- **`ForTypes` factory**: Use `EntityConventionBuilder.ForTypes(typeof(A), typeof(B))` to register a specific subset of entities. Useful in tests and bounded contexts.
+- **Scalar type detection**: Recognises `string`, `DateTime`, `DateTimeOffset`, `decimal`, `Guid`, `bool`, and primitive numeric types plus nullable variants. Custom value objects require explicit `IEntityTypeConfiguration<T>`.
+- **Advanced pluralisation**: The built-in `PluralizedNamingConvention` covers basic English rules. For irregular or non-English nouns implement `IEntityNamingConvention` and use [Humanizer](https://github.com/Humanizr/Humanizer).
+- **Per-entity overrides**: Call `modelBuilder.Entity<T>()` after `_conventions.Apply(modelBuilder)` to override any convention-generated mapping.
+- **Reserved SQL words**: `Order` → `[Order]` under PascalCase, `order` → `[order]` under snake_case in hand-written SQL.
+- **Services working with multiple entities**: `ServiceBase<TEntity>` sets the primary entity type for delete/restore/purge only. Services can freely query and modify any entity type through `UnitOfWork.Query<T>()` — all changes commit atomically in a single `CompleteAsync` call.
+- **`ICurrentUserService` vs assembly anchor**: The assembly anchor (`typeof(Customer).Assembly`) and `ICurrentUserService` are completely independent. The anchor tells the builder where to find domain entities. `ICurrentUserService` provides user identity for audit stamping. Neither requires the other.

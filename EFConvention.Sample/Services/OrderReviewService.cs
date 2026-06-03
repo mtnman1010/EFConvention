@@ -62,7 +62,7 @@ public sealed class OrderService : ServiceBase<Order>, IOrderService
     public async Task<IReadOnlyList<Order>> GetOrdersByCustomerAsync(
         int customerId, CancellationToken ct = default) =>
         await UnitOfWork.Query<Order>()
-            .Where(o => o.CustomerId == customerId)
+            .Where(o => o.Customer.Id == customerId)
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync(ct);
 
@@ -71,8 +71,8 @@ public sealed class OrderService : ServiceBase<Order>, IOrderService
         // Must bypass the global filter to reach soft-deleted rows.
         await UnitOfWork.Query<Order>()
             .IgnoreQueryFilters()
-            .Where(o => o.CustomerId == customerId && o.IsDeleted)
-            .OrderByDescending(o => o.DeletedAt)
+            .Where(o => o.Customer.Id == customerId && o.IsDeleted)
+            .OrderByDescending(o => o.DeletedDate)
             .ToListAsync(ct);
 
     public async Task<Order> AddOrderAsync(Order order, CancellationToken ct = default)
@@ -168,19 +168,24 @@ public sealed class ProductReviewService : ServiceBase<ProductReview>, IProductR
         int productId, CancellationToken ct = default) =>
         await UnitOfWork.Query<ProductReview>()
             .Include(r => r.Customer)
-            .Where(r => r.ProductId == productId)
-            .OrderByDescending(r => r.CreatedAt)
+            .Where(r => r.Product.Id == productId)
+            .OrderByDescending(r => r.CreatedDate)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<ProductReview>> GetReviewsByCustomerAsync(
-        int? customerId, CancellationToken ct = default)
+    int? customerId, CancellationToken ct = default)
     {
         var query = UnitOfWork.Query<ProductReview>().Include(r => r.Product);
 
         // Optional FK — query for anonymous reviews OR reviews by a specific customer.
+        // r.Customer != null guard required — Customer is nullable (optional FK)
         return customerId.HasValue
-            ? await query.Where(r => r.CustomerId == customerId).ToListAsync(ct)
-            : await query.Where(r => r.CustomerId == null).ToListAsync(ct);
+            ? await query
+                .Where(r => r.Customer != null && r.Customer.Id == customerId)
+                .ToListAsync(ct)
+            : await query
+                .Where(r => r.Customer == null)
+                .ToListAsync(ct);
     }
 
     public async Task<ProductReview> AddReviewAsync(ProductReview review, CancellationToken ct = default)

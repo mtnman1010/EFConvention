@@ -1,34 +1,39 @@
 ﻿namespace EFConvention
 {
-    // -----------------------------------------------------------------------------
-    // Behavioural contracts
+    // =============================================================================
+    // EFConvention — Version 2.2
+    // Behaviors.cs
     //
-    //   IAuditable            — automatic created/modified stamping
-    //   ISoftDelete           — soft delete with global query filter
-    // -----------------------------------------------------------------------------
-
-    /// <summary>
-    /// Marks an entity for automatic audit field stamping. When
-    /// <see cref="EntityConventionBuilder.WithAuditFields()"/> is enabled,
-    /// <c>CreatedAt</c> and <c>CreatedBy</c> are set on INSERT and
-    /// <c>ModifiedAt</c> / <c>ModifiedBy</c> are stamped on every UPDATE —
-    /// all via <see cref="Data.AuditInterceptor"/>. Services never set these
-    /// fields directly.
-    /// </summary>
-    /// <remarks>
-    /// Requires <see cref="ICurrentUserService"/> to be registered in DI.
-    /// Falls back to <c>"system"</c> when <c>UserName</c> is null.
-    /// </remarks>
+    // Column name configuration classes for IAuditable and ISoftDelete.
+    //
+    // Breaking changes in v2.2:
+    //   AuditColumnNames defaults changed:
+    //     CreatedDate  → CreateDate
+    //     CreatedBy    → CreateUser
+    //     ModifiedDate → ModifyDate
+    //     ModifiedBy   → ModifyUser
+    //   SoftDeleteColumnNames defaults changed:
+    //     DeletedDate  → DeleteDate
+    //     DeletedBy    → DeleteUser
+    //
+    // To retain v2.1 column names, override explicitly:
+    //   .WithAuditFields(cols => {
+    //       cols.CreatedDate  = "CreatedAt";
+    //       cols.CreatedBy    = "CreatedBy";
+    //       cols.ModifiedDate = "ModifiedAt";
+    //       cols.ModifiedBy   = "ModifiedBy";
+    //   })
+    // =============================================================================
     public interface IAuditable
     {
         /// <summary>UTC timestamp when this record was first created.</summary>
-        DateTime CreatedAt { get; set; }
+        DateTime CreatedDate { get; set; }
 
         /// <summary>Identity of the user or process that created this record.</summary>
         string CreatedBy { get; set; }
 
         /// <summary>UTC timestamp of the most recent modification, or <c>null</c> if never modified.</summary>
-        DateTime? ModifiedAt { get; set; }
+        DateTime? ModifiedDate { get; set; }
 
         /// <summary>Identity of the user or process that last modified this record.</summary>
         string? ModifiedBy { get; set; }
@@ -53,7 +58,7 @@
         bool IsDeleted { get; set; }
 
         /// <summary>UTC timestamp when soft-deleted, or <c>null</c> if active.</summary>
-        DateTime? DeletedAt { get; set; }
+        DateTime? DeletedDate { get; set; }
 
         /// <summary>Identity of the user that deleted this record, or <c>null</c> if active.</summary>
         string? DeletedBy { get; set; }

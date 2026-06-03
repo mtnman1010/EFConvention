@@ -17,7 +17,7 @@ public sealed class ProductService : ServiceBase<Product>, IProductService
     public async Task<IReadOnlyList<Product>> GetProductsByCategoryAsync(
         int categoryId, CancellationToken ct = default) =>
         await UnitOfWork.Query<Product>()
-            .Where(p => p.CategoryId == categoryId)
+            .Where(p => p.Category.Id == categoryId)
             .OrderBy(p => p.Name)
             .ToListAsync(ct);
 
@@ -26,7 +26,7 @@ public sealed class ProductService : ServiceBase<Product>, IProductService
         await UnitOfWork.Query<Product>()
             .IgnoreQueryFilters()
             .Where(p => p.IsDeleted)
-            .OrderByDescending(p => p.DeletedAt)
+            .OrderByDescending(p => p.DeletedDate)
             .ToListAsync(ct);
 
     public async Task<Product> AddProductAsync(Product product, CancellationToken ct = default)

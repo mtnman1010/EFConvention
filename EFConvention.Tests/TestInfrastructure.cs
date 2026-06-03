@@ -114,7 +114,6 @@ public abstract class StoreDbFixture : IDisposable
         Name      = name,
         Email     = email,
         Phone     = "555-0100",
-        AddressId = address.Id,
         Address   = address
     };
 
@@ -134,7 +133,6 @@ public abstract class StoreDbFixture : IDisposable
         Sku         = $"SKU-{name.ToUpper().Replace(" ", "-")}",
         Price       = price,
         CostPrice   = price * 0.6m,
-        CategoryId  = category.Id,
         Category    = category
     };
 
@@ -144,20 +142,18 @@ public abstract class StoreDbFixture : IDisposable
         OrderDate   = DateTime.UtcNow,
         Status      = "Pending",
         TotalAmount = total,
-        CustomerId  = customer.Id,
         Customer    = customer
     };
 
     protected static ProductReview NewReview(Product product,
-        int     rating     = 5,
-        int?    customerId = null,
-        string  comment    = "Great product!") => new()
+    int rating = 5,
+    Customer? customer = null,
+    string comment = "Great product!") => new()
     {
-        Rating     = rating,
-        Comment    = comment,
-        ProductId  = product.Id,
-        Product    = product,
-        CustomerId = customerId
+        Rating = rating,
+        Comment = comment,
+        Product = product,
+        Customer = customer
     };
 
     // -------------------------------------------------------------------------

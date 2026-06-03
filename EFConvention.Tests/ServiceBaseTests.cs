@@ -61,28 +61,28 @@ public abstract class ServiceBaseTestBase
 
     protected Order ActiveOrder() => new()
     {
-        Id         = 1,
-        OrderDate  = DateTime.UtcNow,
-        CustomerId = 1,
-        IsDeleted  = false
+        Id = 1,
+        OrderDate = DateTime.UtcNow,
+        Customer = new Customer { Address = new Address() },
+        IsDeleted = false
     };
 
     protected Order SoftDeletedOrder() => new()
     {
-        Id         = 2,
-        OrderDate  = DateTime.UtcNow.AddDays(-5),
-        CustomerId = 1,
-        IsDeleted  = true,
-        DeletedAt  = DateTime.UtcNow.AddDays(-1),
-        DeletedBy  = "admin"
+        Id = 2,
+        OrderDate = DateTime.UtcNow.AddDays(-5),
+        Customer = new Customer { Address = new Address() },
+        IsDeleted = true,
+        DeletedDate = DateTime.UtcNow.AddDays(-1),
+        DeletedBy = "admin"
     };
 
     protected Customer ActiveCustomer() => new()
     {
-        Id        = 1,
-        Name      = "Alice",
-        Email     = "alice@example.com",
-        AddressId = 1
+        Id = 1,
+        Name = "Alice",
+        Email = "alice@example.com",
+        Address = new Address()
     };
 }
 
@@ -101,7 +101,7 @@ public class DeleteAsyncTests : ServiceBaseTestBase
         await svc.Delete(order);
 
         order.IsDeleted.Should().BeTrue();
-        order.DeletedAt.Should().NotBeNull();
+        order.DeletedDate.Should().NotBeNull();
         order.DeletedBy.Should().Be(TestUserName);
     }
 
@@ -149,9 +149,9 @@ public class DeleteAsyncTests : ServiceBaseTestBase
 
         await svc.Delete(order);
 
-        order.DeletedAt.Should().NotBeNull();
-        order.DeletedAt!.Value.Should().BeOnOrAfter(before);
-        order.DeletedAt!.Value.Should().BeOnOrBefore(DateTime.UtcNow);
+        order.DeletedDate.Should().NotBeNull();
+        order.DeletedDate!.Value.Should().BeOnOrAfter(before);
+        order.DeletedDate!.Value.Should().BeOnOrBefore(DateTime.UtcNow);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class RestoreAsyncTests : ServiceBaseTestBase
         await svc.Restore(order);
 
         order.IsDeleted.Should().BeFalse();
-        order.DeletedAt.Should().BeNull();
+        order.DeletedDate.Should().BeNull();
         order.DeletedBy.Should().BeNull();
     }
 

@@ -1,20 +1,26 @@
 // =============================================================================
-// EFConventions — Version 2.1
+// EFConvention — Version 2.3
 // EntityConventionBuilder.cs
 //
 // Fluent facade that applies convention-over-configuration to an EF Core
-// ModelBuilder. Improvements over v1 ported from LKM ConventionMapper:
+// ModelBuilder.
 //
-//   [NEW] IEntityBase/IEntity interface discovery (replaces Entity base class)
-//   [NEW] DeclaredOnly property scan — prevents re-configuring inherited props
-//   [NEW] CanWrite guard on navigation properties
-//   [NEW] Required vs optional relationship detection ([Required] + nullable FK)
-//   [NEW] [Precision] attribute scan for decimal columns
-//   [NEW] Private collection setter validation
-//   [NEW] Virtual navigation validation when lazy loading is enabled
-//   [NEW] Error collection — all problems reported together at startup
-//   [NEW] ApplyToName on IEntityNamingConvention for audit/softdelete overrides
-//   [IMPROVED] Configurable audit and soft-delete column names
+// Changes in v2.3:
+//   [NEW]      Nullable reference type convention for required/optional detection
+//              Non-nullable navigation → required, nullable navigation → optional
+//              Scalar FK properties (CategoryId etc.) no longer required on domain
+//              objects — EF Core shadow properties handle the FK automatically
+//   [REMOVED]  GetCollectionProperties — dead code removed (was unreferenced
+//              after v2.2 relationship refactor)
+// Changes in v2.2:
+//   [BREAKING] FK columns named after navigation property, not type+Id
+//              e.g. Withholding.Person → FK column "Person" (was "PersonId")
+//   [BREAKING] Audit column defaults changed:
+//              CreatedAt → CreatedDate, ModifiedAt → ModifiedDate
+//              CreatedBy → CreatedBy,   ModifiedBy → ModifiedBy
+//   [NEW]      GetCollection disambiguation — multiple collections of the same
+//              type resolved by StartsWith convention matching, e.g.
+//              PersonWithholdings → Person nav, PayeeWithholdings → Payee nav
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
@@ -31,8 +37,14 @@ namespace EFConvention;
 /// <list type="bullet">
 ///   <item><description>Registers entity tables via the active naming convention.</description></item>
 ///   <item><description>Maps scalar column names via the active naming convention.</description></item>
-///   <item><description>Wires FK relationships from navigation property names (DeclaredOnly — no double-configuration on inheritance hierarchies).</description></item>
-///   <item><description>Detects required vs optional relationships via <c>[Required]</c> and nullable FK types.</description></item>
+///   <item><description>Wires FK relationships using the navigation property name as the FK column name.</description></item>
+///   <item><description>Resolves multiple collections of the same type using StartsWith name convention.</description></item>
+///   <item><description>
+///     Detects required vs optional relationships via <c>[Required]</c>, nullable FK scalar
+///     properties, or nullable reference type annotations — no scalar FK property required.
+///     A non-nullable navigation (<c>Category Category</c>) is required; a nullable navigation
+///     (<c>Category? Category</c>) is optional.
+///   </description></item>
 ///   <item><description>Applies <c>[Precision]</c> attributes to <c>decimal</c> columns automatically.</description></item>
 ///   <item><description>Validates that collection navigation properties have private or no setters.</description></item>
 ///   <item><description>Optionally validates that navigation properties are <c>virtual</c> when lazy loading proxies are enabled.</description></item>
@@ -43,9 +55,18 @@ namespace EFConvention;
 /// </summary>
 /// <example>
 /// <code>
+/// // Minimal domain object — no scalar FK properties needed in v2.3:
+/// public class Product : IEntity
+/// {
+///     public int      Id       { get; set; }
+///     public string   Name     { get; set; } = string.Empty;
+///     public Category Category { get; set; } = null!;  // required — non-nullable
+///     public Supplier? Supplier { get; set; }           // optional — nullable
+/// }
+///
 /// // In UnitOfWork.OnModelCreating:
 /// EntityConventionBuilder
-///     .ForAssemblyOf&lt;Customer&gt;()
+///     .ForAssemblyOf&lt;Product&gt;()
 ///     .UseSnakeCase()
 ///     .WithFullAudit()
 ///     .Apply(modelBuilder);
@@ -54,17 +75,25 @@ namespace EFConvention;
 public sealed class EntityConventionBuilder
 {
     private readonly Assembly _domainAssembly;
-    private IEntityNamingConvention _naming         = new PascalCaseNamingConvention();
-    private bool _useSoftDelete                      = false;
-    private bool _useAudit                           = false;
-    private bool _useLazyLoading                     = false;
-    private AuditColumnNames _auditColumns           = new();
+    private IEntityNamingConvention _naming = new PascalCaseNamingConvention();
+    private bool _useSoftDelete = false;
+    private bool _useAudit = false;
+    private bool _useLazyLoading = false;
+    private AuditColumnNames _auditColumns = new();
     private SoftDeleteColumnNames _softDeleteColumns = new();
-    private readonly List<string> _errors            = new();
+    private readonly List<string> _errors = new();
+
+    private readonly IReadOnlyList<Type>? _explicitTypes;
 
     private EntityConventionBuilder(Assembly domainAssembly)
     {
         _domainAssembly = domainAssembly;
+    }
+
+    private EntityConventionBuilder(IReadOnlyList<Type> explicitTypes)
+    {
+        _domainAssembly = null!;
+        _explicitTypes = explicitTypes;
     }
 
     // -------------------------------------------------------------------------
@@ -79,6 +108,12 @@ public sealed class EntityConventionBuilder
     /// Use any domain type as the anchor.
     /// </summary>
     public static EntityConventionBuilder ForAssemblyOf<T>() => new(typeof(T).Assembly);
+
+    /// <summary>
+    /// Registers only the specified types rather than scanning an entire assembly.
+    /// Useful for testing or when you want to register a subset of entities.
+    /// </summary>
+    public static EntityConventionBuilder ForTypes(params Type[] types) => new(types);
 
     // -------------------------------------------------------------------------
     // Naming conventions
@@ -98,8 +133,8 @@ public sealed class EntityConventionBuilder
     }
 
     /// <summary>
-    /// Converts all table, column, and FK names to snake_case.
-    /// <c>OrderDate</c> → <c>order_date</c>, <c>CustomerId</c> → <c>customer_id</c>.
+    /// Converts all table and column names to snake_case.
+    /// <c>OrderDate</c> → <c>order_date</c>, FK <c>Person</c> → <c>person</c>.
     /// Recommended for PostgreSQL.
     /// </summary>
     public EntityConventionBuilder UseSnakeCase() =>
@@ -119,19 +154,10 @@ public sealed class EntityConventionBuilder
 
     /// <summary>
     /// Enables soft delete for <see cref="ISoftDelete"/> entities. Registers a
-    /// global query filter (<c>WHERE is_deleted = 0</c>) automatically.
+    /// global query filter (<c>WHERE IsDeleted = 0</c>) automatically.
     /// Use <paramref name="configure"/> to override default column names for
     /// legacy schemas — the active naming convention is still applied on top.
     /// </summary>
-    /// <example>
-    /// <code>
-    /// // Default names (convention applied): is_deleted, deleted_at, deleted_by
-    /// .WithSoftDelete()
-    ///
-    /// // Legacy schema override:
-    /// .WithSoftDelete(cols => { cols.IsDeleted = "Archived"; cols.DeletedAt = "ArchivedAt"; })
-    /// </code>
-    /// </example>
     public EntityConventionBuilder WithSoftDelete(Action<SoftDeleteColumnNames>? configure = null)
     {
         _useSoftDelete = true;
@@ -140,20 +166,10 @@ public sealed class EntityConventionBuilder
     }
 
     /// <summary>
-    /// Enables audit field stamping for <see cref="IAuditable"/> entities via
-    /// the <c>UnitOfWork.SaveChanges</c> override.
+    /// Enables audit field stamping for <see cref="IAuditable"/> entities.
     /// Use <paramref name="configure"/> to override default column names for
     /// legacy schemas — the active naming convention is still applied on top.
     /// </summary>
-    /// <example>
-    /// <code>
-    /// // Default names (convention applied): created_at, created_by, modified_at, modified_by
-    /// .WithAuditFields()
-    ///
-    /// // Legacy schema override:
-    /// .WithAuditFields(cols => { cols.CreatedAt = "RecordCreatedDate"; cols.CreatedBy = "RecordCreatedUser"; })
-    /// </code>
-    /// </example>
     public EntityConventionBuilder WithAuditFields(Action<AuditColumnNames>? configure = null)
     {
         _useAudit = true;
@@ -172,8 +188,7 @@ public sealed class EntityConventionBuilder
     /// <summary>
     /// Informs the builder that <c>UseLazyLoadingProxies()</c> is active on the
     /// DbContext options. When set, <see cref="Apply"/> validates that all
-    /// navigation properties on discovered entities are declared <c>virtual</c>
-    /// and reports errors for any that are not.
+    /// navigation properties are declared <c>virtual</c>.
     /// </summary>
     public EntityConventionBuilder WithLazyLoadingValidation()
     {
@@ -186,7 +201,7 @@ public sealed class EntityConventionBuilder
     // -------------------------------------------------------------------------
 
     /// <summary><c>true</c> if audit stamping was enabled.</summary>
-    public bool IsAuditEnabled      => _useAudit;
+    public bool IsAuditEnabled => _useAudit;
 
     /// <summary><c>true</c> if soft delete was enabled.</summary>
     public bool IsSoftDeleteEnabled => _useSoftDelete;
@@ -197,7 +212,7 @@ public sealed class EntityConventionBuilder
 
     /// <summary>
     /// Applies all configured conventions to <paramref name="modelBuilder"/>.
-    /// Call once from <c>OnModelCreating</c> before <c>base.OnModelCreating</c>.
+    /// Call once from <c>OnModelCreating</c> after <c>base.OnModelCreating</c>.
     /// Throws <see cref="InvalidOperationException"/> if any configuration
     /// errors are detected, listing all problems together.
     /// </summary>
@@ -235,7 +250,7 @@ public sealed class EntityConventionBuilder
 
         if (_errors.Any())
             throw new InvalidOperationException(
-                $"EFConventions — {_errors.Count} configuration error(s) detected:\n" +
+                $"EFConvention — {_errors.Count} configuration error(s) detected:\n" +
                 string.Join("\n", _errors.Select((e, i) => $"  {i + 1}. {e}")));
     }
 
@@ -244,6 +259,7 @@ public sealed class EntityConventionBuilder
     // -------------------------------------------------------------------------
 
     private IReadOnlyList<Type> DiscoverEntityTypes() =>
+        _explicitTypes?.ToList() ??
         _domainAssembly.GetTypes()
             .Where(t => t.IsClass &&
                         !t.IsAbstract &&
@@ -251,7 +267,7 @@ public sealed class EntityConventionBuilder
             .ToList();
 
     // -------------------------------------------------------------------------
-    // Private — navigation property helpers (ported from LKM EntityTypeExtensions)
+    // Private — navigation property helpers
     // -------------------------------------------------------------------------
 
     /// <summary>
@@ -266,26 +282,52 @@ public sealed class EntityConventionBuilder
             .Where(p => p.CanWrite && allEntityTypes.Contains(p.PropertyType));
 
     /// <summary>
-    /// Returns directly-declared collection navigation properties
-    /// (ICollection/List/IList of a known entity type). Uses DeclaredOnly
-    /// to prevent re-configuring inherited collections on subclasses.
+    /// Finds the inverse collection on the principal for a given reference
+    /// navigation on the dependent. Handles multiple collections of the same
+    /// type by matching the collection name to the navigation property name
+    /// using a StartsWith convention.
+    ///
+    /// <para>
+    /// Example — <c>Withholding</c> has three navigations to <c>Person</c>:
+    /// <c>Person</c>, <c>Payee</c>, <c>OnBehalfOf</c>. On <c>Person</c>:
+    /// <list type="bullet">
+    ///   <item><description><c>PersonWithholdings.StartsWith("Person")</c> → maps to <c>Person</c> nav</description></item>
+    ///   <item><description><c>PayeeWithholdings.StartsWith("Payee")</c> → maps to <c>Payee</c> nav</description></item>
+    ///   <item><description><c>OnBehalfOfWithholdings.StartsWith("OnBehalfOf")</c> → maps to <c>OnBehalfOf</c> nav</description></item>
+    /// </list>
+    /// </para>
     /// </summary>
-    private static IEnumerable<PropertyInfo> GetCollectionProperties(
-        Type entityType, IReadOnlyList<Type> allEntityTypes) =>
-        entityType
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(p => IsCollectionOfEntity(p.PropertyType, allEntityTypes, out _));
+    private static PropertyInfo? GetCollection(
+        PropertyInfo navProp,
+        IReadOnlyList<Type> allEntityTypes)
+    {
+        // Find all collections on the principal type whose element type
+        // matches the declaring type of the navigation property
+        var matchingCollections = navProp.PropertyType
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite &&
+                        IsCollectionOfEntity(p.PropertyType, allEntityTypes, out var el) &&
+                        el == navProp.DeclaringType)
+            .ToList();
+
+        if (!matchingCollections.Any())
+            return null;
+
+        // Single match — unambiguous
+        if (matchingCollections.Count == 1)
+            return matchingCollections.Single();
+
+        // Multiple collections of same type — disambiguate by name convention:
+        // the collection whose name starts with the navigation property name
+        // e.g. "PersonWithholdings".StartsWith("Person") → Person navigation
+        return matchingCollections
+            .FirstOrDefault(p => p.Name.StartsWith(navProp.Name));
+    }
 
     // -------------------------------------------------------------------------
     // Private — startup validation
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    /// Validates that collection navigation properties have private or no
-    /// setters. A public setter allows callers to replace the entire collection
-    /// from outside the aggregate, breaking encapsulation. All violations are
-    /// accumulated and reported together at the end of <see cref="Apply"/>.
-    /// </summary>
     private void ValidateCollectionSetters(Type entityType)
     {
         foreach (var prop in entityType
@@ -295,7 +337,7 @@ public sealed class EntityConventionBuilder
             if (!pt.IsGenericType) continue;
             var def = pt.GetGenericTypeDefinition();
             if (def != typeof(ICollection<>) &&
-                def != typeof(List<>)         &&
+                def != typeof(List<>) &&
                 def != typeof(IList<>)) continue;
 
             var setter = prop.GetSetMethod(nonPublic: false);
@@ -307,12 +349,6 @@ public sealed class EntityConventionBuilder
         }
     }
 
-    /// <summary>
-    /// When lazy loading proxies are enabled, validates that all navigation
-    /// properties on the entity are declared <c>virtual</c>. EF Core's proxy
-    /// generator must override navigation getters; a non-virtual navigation
-    /// silently breaks lazy loading at runtime.
-    /// </summary>
     private void ValidateNavigationVirtuality(
         Type entityType, IReadOnlyList<Type> allEntityTypes)
     {
@@ -349,10 +385,10 @@ public sealed class EntityConventionBuilder
     private void ConfigureSoftDeleteColumns(ModelBuilder modelBuilder, Type type)
     {
         var e = modelBuilder.Entity(type);
-        e.Property<bool>   (nameof(ISoftDelete.IsDeleted))
+        e.Property<bool>(nameof(ISoftDelete.IsDeleted))
          .HasColumnName(_naming.ApplyToName(_softDeleteColumns.IsDeleted));
-        e.Property<DateTime?>(nameof(ISoftDelete.DeletedAt))
-         .HasColumnName(_naming.ApplyToName(_softDeleteColumns.DeletedAt));
+        e.Property<DateTime?>(nameof(ISoftDelete.DeletedDate))
+         .HasColumnName(_naming.ApplyToName(_softDeleteColumns.DeletedDate));
         e.Property<string?>(nameof(ISoftDelete.DeletedBy))
          .HasColumnName(_naming.ApplyToName(_softDeleteColumns.DeletedBy));
     }
@@ -364,13 +400,13 @@ public sealed class EntityConventionBuilder
     private void ConfigureAuditColumns(ModelBuilder modelBuilder, Type type)
     {
         var e = modelBuilder.Entity(type);
-        e.Property<DateTime> (nameof(IAuditable.CreatedAt))
-         .HasColumnName(_naming.ApplyToName(_auditColumns.CreatedAt));
-        e.Property<string>   (nameof(IAuditable.CreatedBy))
+        e.Property<DateTime>(nameof(IAuditable.CreatedDate))
+         .HasColumnName(_naming.ApplyToName(_auditColumns.CreatedDate));
+        e.Property<string>(nameof(IAuditable.CreatedBy))
          .HasColumnName(_naming.ApplyToName(_auditColumns.CreatedBy));
-        e.Property<DateTime?>(nameof(IAuditable.ModifiedAt))
-         .HasColumnName(_naming.ApplyToName(_auditColumns.ModifiedAt));
-        e.Property<string?>  (nameof(IAuditable.ModifiedBy))
+        e.Property<DateTime?>(nameof(IAuditable.ModifiedDate))
+         .HasColumnName(_naming.ApplyToName(_auditColumns.ModifiedDate));
+        e.Property<string?>(nameof(IAuditable.ModifiedBy))
          .HasColumnName(_naming.ApplyToName(_auditColumns.ModifiedBy));
     }
 
@@ -378,12 +414,6 @@ public sealed class EntityConventionBuilder
     // Private — decimal precision
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    /// Scans decimal and decimal? properties for EF Core's built-in
-    /// <c>[Precision(precision, scale)]</c> attribute and applies it to the
-    /// column mapping. Prevents silent decimal truncation without requiring
-    /// explicit fluent configuration per property.
-    /// </summary>
     private static void ConfigureDecimalPrecision(ModelBuilder modelBuilder, Type entityType)
     {
         foreach (var prop in entityType
@@ -440,62 +470,79 @@ public sealed class EntityConventionBuilder
         Type entityType,
         IReadOnlyList<Type> allEntityTypes)
     {
-        // Collections first — single-reference check skips back-references
-        // that are already covered by the collection side.
-        foreach (var prop in GetCollectionProperties(entityType, allEntityTypes))
-            if (IsCollectionOfEntity(prop.PropertyType, allEntityTypes, out var elementType))
-                ConfigureOneToMany(modelBuilder, entityType, elementType!, prop, allEntityTypes);
-
-        foreach (var prop in GetReferenceProperties(entityType, allEntityTypes))
-            ConfigureSingleReference(modelBuilder, entityType, prop.PropertyType, prop, allEntityTypes);
+        // Reference navigations on the dependent side drive relationship config.
+        // Collections on the principal are found via GetCollection() and used
+        // to wire the WithMany(collectionName) side of the relationship.
+        foreach (var refProp in GetReferenceProperties(entityType, allEntityTypes))
+            ConfigureRelationship(modelBuilder, entityType, refProp, allEntityTypes);
     }
 
-    private void ConfigureOneToMany(
-        ModelBuilder modelBuilder,
-        Type principalType,
-        Type dependentType,
-        PropertyInfo collectionProp,
-        IReadOnlyList<Type> allEntityTypes)
-    {
-        var inverse = GetReferenceProperties(dependentType, allEntityTypes)
-            .FirstOrDefault(p => p.PropertyType == principalType);
-
-        var fkProp  = inverse != null ? GetFkProperty(dependentType, inverse) : null;
-        var fkName  = _naming.GetForeignKeyName(inverse ?? collectionProp, principalType);
-        var entity  = modelBuilder.Entity(principalType);
-
-        if (inverse != null)
-            entity.HasMany(dependentType, collectionProp.Name)
-                  .WithOne(inverse.Name)
-                  .HasForeignKey(fkName)
-                  .IsRequired(IsRequiredNavigation(inverse, fkProp));
-        else
-            entity.HasMany(dependentType, collectionProp.Name)
-                  .WithOne()
-                  .HasForeignKey(fkName);
-    }
-
-    private void ConfigureSingleReference(
+    /// <summary>
+    /// Configures a single reference navigation property as an EF relationship.
+    ///
+    /// <para>
+    /// FK column is named after the <b>navigation property name</b> — not the
+    /// principal type name with "Id" suffix. This matches the ASRC convention:
+    /// <list type="bullet">
+    ///   <item><description><c>Withholding.Person</c> → FK column <c>Person</c></description></item>
+    ///   <item><description><c>Withholding.Payee</c> → FK column <c>Payee</c></description></item>
+    ///   <item><description><c>Withholding.OnBehalfOf</c> → FK column <c>OnBehalfOf</c></description></item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    private void ConfigureRelationship(
         ModelBuilder modelBuilder,
         Type dependentType,
-        Type principalType,
         PropertyInfo refProp,
         IReadOnlyList<Type> allEntityTypes)
     {
-        // Skip — the collection side already registered this relationship.
-        var principalHasCollection = GetCollectionProperties(principalType, allEntityTypes)
-            .Any(p => IsCollectionPropertyOf(p.PropertyType, dependentType));
-        if (principalHasCollection) return;
+        var principalType = refProp.PropertyType;
 
-        var fkProp   = GetFkProperty(dependentType, refProp);
-        var fkName   = _naming.GetForeignKeyName(refProp, principalType);
-        var required = IsRequiredNavigation(refProp, fkProp);
+        // Find the inverse collection on the principal using StartsWith convention
+        var collection = GetCollection(refProp, allEntityTypes);
 
-        modelBuilder.Entity(dependentType)
-            .HasOne(principalType, refProp.Name)
-            .WithMany()
-            .HasForeignKey(fkName)
-            .IsRequired(required);
+        // Required/optional detection — [Required] attribute or non-nullable FK scalar
+        var fkScalar = GetFkProperty(dependentType, refProp);
+        var required = IsRequiredNavigation(refProp, fkScalar);
+
+        var dependent = modelBuilder.Entity(dependentType);
+
+        if (collection != null)
+        {
+            var setter = collection.GetSetMethod(nonPublic: false);
+            if (setter != null)
+                _errors.Add(
+                    $"{collection.DeclaringType!.Name}.{collection.Name} has a public setter. " +
+                    "Collection navigation properties must use 'private set;' or no setter.");
+
+            dependent
+                .HasOne(principalType, refProp.Name)
+                .WithMany(collection.Name)
+                .IsRequired(required);
+        }
+        else
+        {
+            dependent
+                .HasOne(principalType, refProp.Name)
+                .WithMany()
+                .IsRequired(required);
+        }
+
+        // After wiring, rename the FK column to the navigation property name.
+        // EF Core auto-creates a shadow property named "{NavName}Id" — we keep
+        // that internal name but rename the database column to just "{NavName}".
+        var shadowPropName = fkScalar?.Name ?? (refProp.Name + "Id");
+        try
+        {
+            modelBuilder.Entity(dependentType)
+                .Property(shadowPropName)
+                .HasColumnName(_naming.ApplyToName(refProp.Name));
+        }
+        catch
+        {
+            // If the shadow property doesn't exist or can't be renamed, leave it
+            // as EF Core named it — don't break the build over column naming
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -503,27 +550,66 @@ public sealed class EntityConventionBuilder
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// A navigation is required when either:
-    /// (a) the navigation property carries <c>[Required]</c>, or
-    /// (b) the corresponding FK property is a non-nullable value type (e.g. int
-    ///     rather than int?), indicating the database column cannot be NULL.
+    /// Determines whether a navigation relationship is required or optional
+    /// using a three-step priority chain:
+    ///
+    /// <list type="number">
+    ///   <item><description>
+    ///     <c>[Required]</c> attribute on the navigation property → always required.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Scalar FK property nullability (backwards-compatible) — if a scalar FK
+    ///     property exists (e.g. <c>CategoryId</c>), its nullability determines
+    ///     required vs optional. Non-nullable <c>int</c> → required;
+    ///     nullable <c>int?</c> → optional.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Nullable reference type annotation (new in v2.3) — when no scalar FK
+    ///     property exists, the nullability of the navigation property itself
+    ///     determines required vs optional. Non-nullable <c>Category Category</c>
+    ///     → required; nullable <c>Category? Category</c> → optional.
+    ///     Requires <c>&lt;Nullable&gt;enable&lt;/Nullable&gt;</c> in the project file.
+    ///   </description></item>
+    /// </list>
+    ///
+    /// <para>
+    /// This means scalar FK properties are no longer required on domain objects.
+    /// The cleanest v2.3 domain style omits them entirely:
+    /// <code>
+    /// public class Product : IEntity
+    /// {
+    ///     public int      Id       { get; set; }
+    ///     public string   Name     { get; set; } = string.Empty;
+    ///     public Category Category { get; set; } = null!;  // required
+    ///     public Supplier? Supplier { get; set; }           // optional
+    /// }
+    /// </code>
+    /// Scalar FK properties are still supported for backwards compatibility and
+    /// for cases where you need to set the FK without loading the navigation.
+    /// </para>
     /// </summary>
     private static bool IsRequiredNavigation(PropertyInfo navProp, PropertyInfo? fkProp)
     {
+        // Step 1 — [Required] attribute always wins
         if (navProp.GetCustomAttributes<RequiredAttribute>(inherit: true).Any())
             return true;
 
+        // Step 2 — scalar FK property nullability (backwards-compatible)
         if (fkProp != null)
             return fkProp.PropertyType.IsValueType &&
                    Nullable.GetUnderlyingType(fkProp.PropertyType) == null;
 
-        return false;
+        // Step 3 — nullable reference type annotation (v2.3)
+        // Non-nullable navigation → required; nullable navigation → optional
+        // Requires <Nullable>enable</Nullable> in the project file
+        var nullabilityInfo = new NullabilityInfoContext().Create(navProp);
+        return nullabilityInfo.WriteState == NullabilityState.NotNull;
     }
 
     /// <summary>
-    /// Looks for a conventionally-named FK scalar property on
-    /// <paramref name="entityType"/> — e.g. for a navigation <c>Customer</c>
-    /// it looks for <c>CustomerId</c>.
+    /// Looks for a conventionally-named FK scalar property on the dependent —
+    /// e.g. for a navigation <c>Person</c> it looks for <c>PersonId</c>.
+    /// Used only for required/optional detection, not for FK column naming.
     /// </summary>
     private static PropertyInfo? GetFkProperty(Type entityType, PropertyInfo navProp) =>
         entityType.GetProperty(
@@ -543,7 +629,7 @@ public sealed class EntityConventionBuilder
         if (!propType.IsGenericType) return false;
         var def = propType.GetGenericTypeDefinition();
         if (def != typeof(ICollection<>) &&
-            def != typeof(List<>)         &&
+            def != typeof(List<>) &&
             def != typeof(IList<>)) return false;
         var arg = propType.GetGenericArguments()[0];
         if (!allEntityTypes.Contains(arg)) return false;

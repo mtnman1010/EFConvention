@@ -45,8 +45,8 @@ public class CustomerIntegrationTests : StoreDbFixture
         loaded!.Name.Should().Be("Alice Smith");
         loaded.CreatedBy.Should().Be(TestUser,
             "AuditInterceptor stamps CreatedBy on INSERT");
-        loaded.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
-        loaded.ModifiedAt.Should().BeNull("not yet modified");
+        loaded.CreatedDate.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        loaded.ModifiedDate.Should().BeNull("not yet modified");
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class CustomerIntegrationTests : StoreDbFixture
 
         loaded!.Name.Should().Be("Alice Jones");
         loaded.ModifiedBy.Should().Be(TestUser);
-        loaded.ModifiedAt.Should().NotBeNull();
+        loaded.ModifiedDate.Should().NotBeNull();
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public class OrderIntegrationTests : StoreDbFixture
             .FirstOrDefaultAsync(o => o.Id == order.Id);
 
         loaded!.IsDeleted.Should().BeFalse();
-        loaded.DeletedAt.Should().BeNull();
+        loaded.DeletedDate.Should().BeNull();
         loaded.DeletedBy.Should().BeNull();
     }
 
@@ -157,7 +157,7 @@ public class OrderIntegrationTests : StoreDbFixture
         raw.Should().NotBeNull("soft-deleted row is retained");
         raw!.IsDeleted.Should().BeTrue();
         raw.DeletedBy.Should().Be(TestUser);
-        raw.DeletedAt.Should().NotBeNull();
+        raw.DeletedDate.Should().NotBeNull();
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class OrderIntegrationTests : StoreDbFixture
 
         restored.Should().NotBeNull();
         restored!.IsDeleted.Should().BeFalse();
-        restored.DeletedAt.Should().BeNull();
+        restored.DeletedDate.Should().BeNull();
         restored.DeletedBy.Should().BeNull();
     }
 
@@ -236,7 +236,7 @@ public class OrderIntegrationTests : StoreDbFixture
 
         // Soft delete triggers Modified state → AuditInterceptor stamps fields
         raw!.ModifiedBy.Should().Be(TestUser);
-        raw.ModifiedAt.Should().NotBeNull();
+        raw.ModifiedDate.Should().NotBeNull();
     }
 
     [Fact]
@@ -346,7 +346,7 @@ public class ProductReviewIntegrationTests : StoreDbFixture
     public async Task AddReview_WithCustomer_CanBeRetrievedByCustomerId()
     {
         var review = await _svc.AddReviewAsync(
-            NewReview(_product, customerId: _customer.Id));
+            NewReview(_product, customer: _customer));
 
         var results = await _svc.GetReviewsByCustomerAsync(_customer.Id);
         results.Should().ContainSingle(r => r.Id == review.Id);
@@ -356,17 +356,17 @@ public class ProductReviewIntegrationTests : StoreDbFixture
     public async Task AddReview_WithoutCustomer_IsAnonymous()
     {
         var review = await _svc.AddReviewAsync(
-            NewReview(_product, customerId: null, comment: "Anonymous review"));
+            NewReview(_product, comment: "Anonymous review"));  // customer defaults to null
 
         var anonymous = await _svc.GetReviewsByCustomerAsync(null);
         anonymous.Should().ContainSingle(r => r.Id == review.Id,
-            "reviews with null CustomerId are anonymous");
+            "reviews with null Customer are anonymous");
     }
 
     [Fact]
     public async Task AnonymousReviews_AreNotReturnedForCustomerQuery()
     {
-        await _svc.AddReviewAsync(NewReview(_product, customerId: null));
+        await _svc.AddReviewAsync(NewReview(_product));  // customer defaults to null
 
         var results = await _svc.GetReviewsByCustomerAsync(_customer.Id);
         results.Should().BeEmpty("customer query should not return anonymous reviews");
@@ -400,8 +400,8 @@ public class ProductReviewIntegrationTests : StoreDbFixture
     [Fact]
     public async Task GetReviewsForProduct_ReturnsAllReviews()
     {
-        await _svc.AddReviewAsync(NewReview(_product, customerId: _customer.Id));
-        await _svc.AddReviewAsync(NewReview(_product, customerId: null));
+        await _svc.AddReviewAsync(NewReview(_product, customer: _customer));
+        await _svc.AddReviewAsync(NewReview(_product));  // anonymous — customer defaults to null
 
         var results = await _svc.GetReviewsForProductAsync(_product.Id);
         results.Should().HaveCount(2);
@@ -424,9 +424,9 @@ public class AuditInterceptorTests : StoreDbFixture
         var customer = await _svc.AddCustomerAsync(NewCustomer(address));
 
         customer.CreatedBy .Should().Be(TestUser);
-        customer.CreatedAt .Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        customer.CreatedDate .Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         customer.ModifiedBy.Should().BeNull("not modified yet");
-        customer.ModifiedAt.Should().BeNull("not modified yet");
+        customer.ModifiedDate.Should().BeNull("not modified yet");
     }
 
     [Fact]
@@ -435,15 +435,15 @@ public class AuditInterceptorTests : StoreDbFixture
         var address  = await AddAsync(NewAddress());
         var customer = await _svc.AddCustomerAsync(NewCustomer(address));
 
-        var originalCreatedAt = customer.CreatedAt;
+        var originalCreatedAt = customer.CreatedDate;
         var originalCreatedBy = customer.CreatedBy;
 
         customer.Name = "Updated Name";
         await _svc.SaveCustomerAsync(customer);
 
         customer.ModifiedBy.Should().Be(TestUser);
-        customer.ModifiedAt.Should().NotBeNull();
-        customer.CreatedAt .Should().Be(originalCreatedAt, "CreatedAt never changes");
+        customer.ModifiedDate.Should().NotBeNull();
+        customer.CreatedDate .Should().Be(originalCreatedAt, "CreatedAt never changes");
         customer.CreatedBy .Should().Be(originalCreatedBy, "CreatedBy never changes");
     }
 

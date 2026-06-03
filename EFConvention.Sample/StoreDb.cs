@@ -1,15 +1,18 @@
 // =============================================================================
-// EFConventions — Version 2.1
+// EFConvention — Version 2.3
 // Data/StoreDb.cs  [APPLICATION CODE — not part of the library]
 //
-// Change from v2.0:
-//   ICurrentUserService is now defined in the EFConventions library
-//   (Core/DomainContracts.cs). This file no longer declares the interface —
-//   it only provides the two concrete implementations and the DI wiring.
+// Changes from v2.2:
+//   Domain objects no longer require scalar FK properties (AddressId,
+//   CustomerId etc.). Required/optional relationships are now detected
+//   via nullable reference type annotations on the navigation property:
+//     public Address  Address  { get; set; } = null!;  // non-nullable → required
+//     public Customer? Customer { get; set; }           // nullable    → optional
 //
 // Contents:
 //   HttpContextCurrentUserService — ASP.NET Core web app implementation
 //   SystemUserService             — background job / console app implementation
+//   Additional implementations    — commented examples for other environments
 //   StoreDb                       — concrete UnitOfWork for the Store database
 //   ServiceRegistration           — DI extension methods
 // =============================================================================
@@ -26,13 +29,18 @@ namespace EFConvention.Sample;
 // -----------------------------------------------------------------------------
 // ICurrentUserService implementations  [APPLICATION CODE]
 //
-// ICurrentUserService itself is now in the library (EFConventions namespace).
+// ICurrentUserService is defined in the library (EFConvention namespace).
 // Only the implementations live here — one per hosting environment.
+//
+// ICurrentUserService is ONLY required when using audit stamping via
+// WithAuditFields() or WithFullAudit(). If your application does not need
+// audit stamping, skip this entirely — see the SimpleDb example below.
 // -----------------------------------------------------------------------------
 
 /// <summary>
-/// ASP.NET Core implementation. Resolves the username from the current HTTP
-/// request's claims principal via <see cref="IHttpContextAccessor"/>.
+/// ASP.NET Core MVC / Razor Pages / Web API implementation.
+/// Resolves the username from the current HTTP request's claims principal
+/// via <see cref="IHttpContextAccessor"/>.
 /// </summary>
 public sealed class HttpContextCurrentUserService : ICurrentUserService
 {
@@ -56,6 +64,75 @@ public sealed class SystemUserService : ICurrentUserService
 }
 
 // -----------------------------------------------------------------------------
+// Additional ICurrentUserService implementations — uncomment as needed
+// -----------------------------------------------------------------------------
+
+// Web API with JWT — resolve from claims principal
+//
+//public sealed class JwtCurrentUserService : ICurrentUserService
+//{
+//    private readonly IHttpContextAccessor _accessor;
+//    public JwtCurrentUserService(IHttpContextAccessor accessor)
+//        => _accessor = accessor;
+//    public string? UserName =>
+//        _accessor.HttpContext?.User?.FindFirst(
+//            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+//        ?? _accessor.HttpContext?.User?.FindFirst("sub")?.Value;
+//}
+
+// Blazor Server — resolve from AuthenticationStateProvider
+//
+//public sealed class BlazorCurrentUserService : ICurrentUserService
+//{
+//    private readonly Microsoft.AspNetCore.Components.Authorization
+//        .AuthenticationStateProvider _authState;
+//    public BlazorCurrentUserService(
+//        Microsoft.AspNetCore.Components.Authorization
+//            .AuthenticationStateProvider authState)
+//        => _authState = authState;
+//    public string? UserName
+//    {
+//        get
+//        {
+//            var state = _authState.GetAuthenticationStateAsync()
+//                .GetAwaiter().GetResult();
+//            return state.User?.Identity?.Name;
+//        }
+//    }
+//}
+
+// WPF / WinForms — Windows authentication (domain-joined apps)
+//
+//public sealed class WindowsCurrentUserService : ICurrentUserService
+//{
+//    public string? UserName =>
+//        System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+//}
+
+// WPF / WinForms / MVVM — custom login session
+//
+//public sealed class SessionCurrentUserService : ICurrentUserService
+//{
+//    private readonly ISessionService _session;
+//    public SessionCurrentUserService(ISessionService session)
+//        => _session = session;
+//    public string? UserName => _session.CurrentUser?.Username;
+//}
+
+// Console / CLI — Environment.UserName or prompt at startup
+//
+//public sealed class ConsoleCurrentUserService : ICurrentUserService
+//{
+//    public string? UserName { get; }
+//    public ConsoleCurrentUserService(string userName) => UserName = userName;
+//}
+//
+// Usage in Program.cs:
+//   var userName = args.FirstOrDefault() ?? Environment.UserName;
+//   services.AddSingleton<ICurrentUserService>(
+//       new ConsoleCurrentUserService(userName));
+
+// -----------------------------------------------------------------------------
 // StoreDb  [APPLICATION CODE]
 // -----------------------------------------------------------------------------
 
@@ -72,6 +149,22 @@ public sealed class SystemUserService : ICurrentUserService
 ///     <see cref="UnitOfWork"/> itself.
 ///   </description></item>
 /// </list>
+///
+/// <para>
+/// Uses the default PascalCase naming convention — table names, column names,
+/// and FK columns all match C# class and property names exactly.
+/// To use snake_case instead, change <c>b => b.WithFullAudit()</c> to
+/// <c>b => b.UseSnakeCase().WithFullAudit()</c> and update your schema
+/// script accordingly.
+/// </para>
+///
+/// <para>
+/// The assembly anchor (<c>typeof(Customer)</c>) is any type from your domain
+/// assembly — it tells the builder which assembly to scan for
+/// <see cref="IEntityBase"/> implementations. It has no relationship to
+/// <see cref="ICurrentUserService"/> or audit stamping.
+/// </para>
+///
 /// All other layers depend on <see cref="IUnitOfWork"/> and never reference
 /// this class directly.
 /// </summary>
@@ -87,8 +180,8 @@ public sealed class StoreDb : UnitOfWork
     /// </param>
     public StoreDb(string connectionString, ICurrentUserService currentUser)
         : base(
-            domainAssembly:       typeof(Customer).Assembly,
-            configureConventions: b => b.UseSnakeCase().WithFullAudit())
+            domainAssembly: typeof(Customer).Assembly,  // scan anchor — any domain type
+            configureConventions: b => b.WithFullAudit())      // PascalCase (default)
     {
         _connectionString = connectionString;
         _auditInterceptor = new AuditInterceptor(currentUser);
@@ -100,16 +193,55 @@ public sealed class StoreDb : UnitOfWork
         if (!options.IsConfigured)
             options
                 .UseSqlServer(_connectionString)
+                .EnableServiceProviderCaching(false)
                 .AddInterceptors(_auditInterceptor);
     }
 }
+
+// -----------------------------------------------------------------------------
+// No audit stamping — ICurrentUserService not needed
+//
+// If your application does not need audit stamping, do not call
+// WithAuditFields() or WithFullAudit(). ICurrentUserService is never
+// referenced and does not need to be registered or implemented.
+//
+// The assembly anchor (typeof(Product)) is still required — it just tells
+// the builder which assembly to scan for domain entities. Pick any stable
+// type from your domain assembly. It has no relationship to identity or
+// audit stamping.
+// -----------------------------------------------------------------------------
+
+//public sealed class SimpleDb : UnitOfWork
+//{
+//    private readonly string _connectionString;
+//
+//    public SimpleDb(string connectionString)
+//        : base(
+//            domainAssembly:       typeof(Product).Assembly,  // scan anchor
+//            configureConventions: b => b.UseSnakeCase())      // no WithAuditFields
+//    {
+//        _connectionString = connectionString;
+//    }
+//
+//    protected override void OnConfiguring(DbContextOptionsBuilder options)
+//    {
+//        if (!options.IsConfigured)
+//            options.UseSqlServer(_connectionString);
+//        // No AddInterceptors — AuditInterceptor not needed
+//    }
+//}
+//
+// DI registration — no ICurrentUserService needed:
+//
+//   services.AddScoped<IUnitOfWork>(sp =>
+//       new SimpleDb(connectionString));
 
 // -----------------------------------------------------------------------------
 // DI registration  [APPLICATION CODE]
 // -----------------------------------------------------------------------------
 
 /// <summary>
-/// Extension methods to register the full EFConventions stack.
+/// Extension methods to register the full EFConvention stack.
 /// Call from <c>Program.cs</c> during application startup.
 /// </summary>
 public static class ServiceRegistration
@@ -138,9 +270,9 @@ public static class ServiceRegistration
                 connectionString,
                 sp.GetRequiredService<ICurrentUserService>()));
 
-        services.AddScoped<ICustomerService,      CustomerService>();
-        services.AddScoped<IProductService,       ProductService>();
-        services.AddScoped<IOrderService,         OrderService>();
+        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IProductReviewService, ProductReviewService>();
 
         return services;
@@ -161,9 +293,9 @@ public static class ServiceRegistration
                 connectionString,
                 sp.GetRequiredService<ICurrentUserService>()));
 
-        services.AddScoped<ICustomerService,      CustomerService>();
-        services.AddScoped<IProductService,       ProductService>();
-        services.AddScoped<IOrderService,         OrderService>();
+        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IProductReviewService, ProductReviewService>();
 
         return services;
