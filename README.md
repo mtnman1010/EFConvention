@@ -1,6 +1,12 @@
-# EFConvention
+[![NuGet](https://img.shields.io/nuget/v/EFConventionBuilder)](https://nuget.org/packages/EFConventionBuilder)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/EFConventionBuilder)](https://nuget.org/packages/EFConventionBuilder)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A lightweight EF Core convention-over-configuration library. Drop it into any project to automatically discover domain entities, map table and column names, wire foreign key relationships, enforce soft delete, and stamp audit fields — all without writing repetitive `OnModelCreating` boilerplate.
+# EFConventionBuilder
+
+**NuGet:** `dotnet add package EFConventionBuilder`
+
+A lightweight **EF Core convention builder** for .NET. Drop it into any project to automatically discover domain entities, map table and column names, wire foreign key relationships, enforce soft delete, and stamp audit fields — all without writing repetitive `OnModelCreating` boilerplate.
 
 ---
 
@@ -767,3 +773,13 @@ EntityConventionBuilder
 - **Reserved SQL words**: `Order` → `[Order]` under PascalCase, `order` → `[order]` under snake_case in hand-written SQL.
 - **Services working with multiple entities**: `ServiceBase<TEntity>` sets the primary entity type for delete/restore/purge only. Services can freely query and modify any entity type through `UnitOfWork.Query<T>()` — all changes commit atomically in a single `CompleteAsync` call.
 - **`ICurrentUserService` vs assembly anchor**: The assembly anchor (`typeof(Customer).Assembly`) and `ICurrentUserService` are completely independent. The anchor tells the builder where to find domain entities. `ICurrentUserService` provides user identity for audit stamping. Neither requires the other.
+
+---
+
+## Links
+
+- **NuGet**: [nuget.org/packages/EFConventionBuilder](https://nuget.org/packages/EFConventionBuilder)
+- **Source**: [github.com/mtnman1010/EFConventionBuilder](https://github.com/mtnman1010/EFConventionBuilder)
+- **Issues**: [github.com/mtnman1010/EFConventionBuilder/issues](https://github.com/mtnman1010/EFConventionBuilder/issues)
+- **Wiki**: [github.com/mtnman1010/EFConventionBuilder/wiki](https://github.com/mtnman1010/EFConventionBuilder/wiki)
+- **License**: MIT
