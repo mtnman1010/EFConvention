@@ -102,9 +102,9 @@ public class ProductService : ServiceBase<Product>
 
 | Version | Date | Highlights |
 |---|---|---|
-| **2.3.0** | 2025 | Nullable reference type convention — scalar FK properties optional. Non-nullable navigation → required, nullable navigation → optional. Dead code cleanup. |
-| **2.2.0** | 2025 | FK columns named after navigation property (`Customer` not `CustomerId`). `GetCollection` disambiguation for multiple collections of same type. `IAuditable` property renames (`CreatedDate`, `ModifiedDate`). `ForTypes` factory. |
-| **2.1.0** | 2025 | `ICurrentUserService` moved into library. `ServiceBase<T>` ships in library. `AuditInterceptor` decoupled from `UnitOfWork`. `[Obsolete]` on sync `Complete()`. |
+| **2.3.0** | 2026 | Nullable reference type convention — scalar FK properties optional. Non-nullable navigation → required, nullable navigation → optional. Dead code cleanup. |
+| **2.2.0** | 2026 | FK columns named after navigation property (`Customer` not `CustomerId`). `GetCollection` disambiguation for multiple collections of same type. `IAuditable` property renames (`CreatedDate`, `ModifiedDate`). `ForTypes` factory. |
+| **2.1.0** | 2026 | `ICurrentUserService` moved into library. `ServiceBase<T>` ships in library. `AuditInterceptor` decoupled from `UnitOfWork`. `[Obsolete]` on sync `Complete()`. |
 
 ---
 
@@ -122,6 +122,7 @@ public class ProductService : ServiceBase<Product>
 | Testing | `ForTypes`, in-memory, Moq | [[Testing]] |
 | Migration guide | v2.1 → v2.3 breaking changes | [[Migration Guide]] |
 | FAQ | Common questions | [[FAQ]] |
+| AI assistant | Prompt generator for new implementations | [[AI Implementation Assistant]] |
 
 ---
 
@@ -172,6 +173,6 @@ See [[Audit Stamping]] for full implementation examples for each environment.
 ## Links
 
 - **NuGet**: [nuget.org/packages/EFConventionBuilder](https://nuget.org/packages/EFConventionBuilder)
-- **Source**: [github.com/mtnman1010/EFConvention](https://github.com/mtnman1010/EFConvention)
-- **Issues**: [github.com/mtnman1010/EFConvention/issues](https://github.com/mtnman1010/EFConvention/issues)
+- **Source**: [github.com/mtnman1010/EFConventionBuilder](https://github.com/mtnman1010/EFConventionBuilder)
+- **Issues**: [github.com/mtnman1010/EFConventionBuilder/issues](https://github.com/mtnman1010/EFConventionBuilder/issues)
 - **License**: MIT

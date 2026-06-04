@@ -338,6 +338,55 @@ See [[Testing]] for a complete guide to unit and integration testing.
 
 ---
 
+## Data access patterns — Find vs FindAsync vs Query
+
+Three methods are available for reading data from the database. Choosing the right one communicates intent clearly:
+
+| Method | Intent | When to use |
+|---|---|---|
+| `FindAsync<T>(id)` | Lookup by primary key — simple | Know the ID, no includes needed. Uses EF identity map — returns cached instance if already tracked. |
+| `Query<T>()` | Search by criteria — compose freely | Filtering by properties, ordering, projections, or any query that isn't a simple PK lookup. |
+
+```csharp
+// FindAsync — simple PK lookup, identity map benefit
+var customer = await UnitOfWork.FindAsync<Customer>(id, ct);
+
+// Query — search by criteria
+var pendingOrders = await UnitOfWork.Query<Order>()
+    .Where(o => o.Status == "Pending")
+    .Include(o => o.Customer)
+    .OrderByDescending(o => o.OrderDate)
+    .ToListAsync(ct);
+
+// Query — PK lookup with includes (when FindAsync isn't enough)
+var order = await UnitOfWork.Query<Order>()
+    .Include(o => o.Customer)
+    .Include(o => o.Items)
+    .FirstOrDefaultAsync(o => o.Id == id, ct);
+```
+
+**Coming in v2.4** — a `Find<T>(id)` method returning `IQueryable<T>` pre-filtered by PK for fluent composition:
+
+```csharp
+// Find — PK anchor with free composition (v2.4)
+var order = await UnitOfWork.Find<Order>(id)
+    .Include(o => o.Customer)
+    .Include(o => o.Items)
+    .FirstOrDefaultAsync(ct);
+
+// Find with soft delete bypass (v2.4)
+var order = await UnitOfWork.Find<Order>(id)
+    .IgnoreQueryFilters()
+    .FirstOrDefaultAsync(ct);
+```
+
+The three-method vocabulary will be:
+- `FindAsync` — simple PK lookup, identity map, no composition
+- `Find` — PK anchor, composable (v2.4)
+- `Query` — criteria-based search, full LINQ composition
+
+---
+
 ## Next steps
 
 - [[Service Base]] — `DeleteAsync`, `RestoreAsync`, and `PurgeAsync` built on top of `IUnitOfWork`

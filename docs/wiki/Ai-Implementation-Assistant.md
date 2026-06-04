@@ -1,331 +1,249 @@
-# AI Implementation Assistant
+# AI Implementation Assistant and Prompt Generation
 
-This page helps you generate a tailored prompt for an AI assistant (Claude, ChatGPT, Copilot etc.) to scaffold an EFConventionBuilder implementation for your specific project. Answer the questions below, then copy the filled-in prompt at the bottom and paste it into your AI assistant of choice.
-
----
-
-## Questions to answer before generating your prompt
-
-Work through each section. Your answers replace the `[TOKEN]` placeholders in the prompt at the bottom.
+This page provides ready-to-use prompts for three common scenarios. Each prompt is designed to give an AI assistant (Claude, ChatGPT, Copilot etc.) the context it needs to produce accurate, convention-correct EFConventionBuilder code without you having to explain the library from scratch.
 
 ---
 
-### 1. Project type
+## Before you start — give the AI context
 
-What kind of application are you building?
+An AI assistant that knows nothing about EFConventionBuilder will produce generic EF Core code that ignores the library's conventions. Before using any prompt below, paste the README into your chat first:
 
-- [ ] ASP.NET Core Web API
-- [ ] ASP.NET Core MVC / Razor Pages
-- [ ] Blazor Server
-- [ ] WPF / WinForms desktop app
-- [ ] Console / CLI tool
-- [ ] Background job / worker service
-- [ ] Class library (no UI)
-
-**Your answer:** `[PROJECT_TYPE]`
-
----
-
-### 2. Database
-
-What database are you targeting?
-
-- [ ] SQL Server
-- [ ] PostgreSQL
-- [ ] SQLite
-- [ ] Other: ___________
-
-**Your answer:** `[DATABASE]`
-
----
-
-### 3. Naming convention
-
-Which naming convention do you want?
-
-- [ ] PascalCase (default — recommended for SQL Server)
-- [ ] snake_case (recommended for PostgreSQL)
-- [ ] Pluralized tables + PascalCase columns
-- [ ] Custom (describe below)
-
-**Your answer:** `[NAMING_CONVENTION]`
-
----
-
-### 4. Audit stamping
-
-Do you need audit fields (`CreatedDate`, `CreatedBy`, `ModifiedDate`, `ModifiedBy`)?
-
-- [ ] Yes — full audit on all entities
-- [ ] Yes — only on some entities (list them below)
-- [ ] No
-
-If yes, which entities need audit stamping? `[AUDITABLE_ENTITIES]`
-
----
-
-### 5. Soft delete
-
-Do you need soft delete (`IsDeleted`, `DeletedDate`, `DeletedBy`)?
-
-- [ ] Yes — soft delete on all entities
-- [ ] Yes — only on some entities (list them below)
-- [ ] No — hard delete only
-
-If yes, which entities need soft delete? `[SOFT_DELETE_ENTITIES]`
-
----
-
-### 6. Domain entities
-
-List your domain entities. For each, note:
-- What it represents
-- Its key relationships (one-to-many, optional FK etc.)
-- Whether it needs audit / soft delete
-
-Example:
-```
-Customer — a store customer
-  - has many Orders (one-to-many)
-  - has one Address (required FK)
-  - IAuditable, hard delete
-
-Order — a customer order
-  - belongs to Customer (required)
-  - has many OrderItems (one-to-many)
-  - IAuditable + ISoftDelete
-```
-
-**Your entities:** `[DOMAIN_ENTITIES]`
-
----
-
-### 7. Identity / current user
-
-How does your application know who the current user is?
-
-- [ ] ASP.NET Core — HTTP context claims principal
-- [ ] JWT — claims from Bearer token
-- [ ] Blazor Server — AuthenticationStateProvider
-- [ ] Windows authentication — WindowsIdentity
-- [ ] Custom login session — describe: ___________
-- [ ] Background job — always "system"
-- [ ] No audit stamping — not needed
-
-**Your answer:** `[IDENTITY_SOURCE]`
-
----
-
-### 8. Services needed
-
-List the application services you need. For each, describe the key operations:
-
-Example:
-```
-IOrderService — GetOrder, GetOrdersByCustomer, PlaceOrder, DeleteOrder, RestoreOrder
-ICustomerService — GetCustomer, AddCustomer, UpdateCustomer, DeleteCustomer
-IProductService — GetProduct, SearchProducts, AddProduct, DeleteProduct
-```
-
-**Your services:** `[SERVICES]`
-
----
-
-### 9. DI framework
-
-How are you registering services?
-
-- [ ] ASP.NET Core built-in DI (`IServiceCollection`)
-- [ ] .NET Generic Host (`IServiceCollection`)
-- [ ] Manual / no DI container
-
-**Your answer:** `[DI_FRAMEWORK]`
-
----
-
-### 10. Testing
-
-What testing approach do you want?
-
-- [ ] Unit tests with Moq (no database)
-- [ ] Integration tests with EF Core in-memory provider
-- [ ] Both
-- [ ] None for now
-
-**Your answer:** `[TESTING_APPROACH]`
-
----
-
-### 11. Additional requirements
-
-Any other requirements or constraints?
-
-- Legacy schema with existing column names to map to?
-- Multiple databases or bounded contexts?
-- Specific EF Core features (raw SQL, owned entities, value objects)?
-- Specific .NET version?
-
-**Your answer:** `[ADDITIONAL_REQUIREMENTS]`
-
----
-
-## The prompt
-
-Once you have answered the questions above, copy the prompt below, replace every `[TOKEN]` with your answer, and paste it into your AI assistant.
-
----
+1. Go to the [EFConventionBuilder README](https://github.com/mtnman1010/EFConventionBuilder/blob/main/README.md)
+2. Copy the entire contents
+3. Paste it into a new AI chat with this opening line:
 
 ```
-I am building a [PROJECT_TYPE] using EFConventionBuilder — a convention-over-configuration 
-library for EF Core. Please scaffold a complete implementation for my project.
+Here is the documentation for EFConventionBuilder, a convention-over-configuration 
+library for EF Core. Please read it carefully — I will ask you to write code using 
+this library and I need you to follow its conventions exactly.
+```
 
-## Database
-Target database: [DATABASE]
-Naming convention: [NAMING_CONVENTION]
+Wait for the AI to acknowledge it has read and understood the documentation before proceeding with one of the prompts below.
+
+---
+
+## What the README covers
+
+The README gives the AI everything it needs to know about:
+
+- `IEntityBase`, `IEntity`, `IAuditable`, `ISoftDelete`, `ICurrentUserService` — interfaces and their purpose
+- `EntityConventionBuilder` — fluent configuration facade and all builder methods
+- `IUnitOfWork` / `UnitOfWork` — data access pattern, all available methods
+- `ServiceBase<TEntity>` — delete/restore/purge helpers
+- `AuditInterceptor` — how audit stamping works
+- Naming conventions — PascalCase, snake_case, pluralized, custom
+- Relationship detection — nullable reference type convention, StartsWith disambiguation
+- Soft delete — global query filter, lifecycle
+- All valid configuration patterns
+- ICurrentUserService implementations for every hosting environment
+
+---
+
+## Scenario 1 — New project scaffold
+
+Use this when starting a greenfield project and you want the AI to scaffold the full implementation from scratch.
+
+```
+Using the EFConventionBuilder documentation I provided, please scaffold a complete 
+implementation for my project.
+
+## Project type
+[e.g. ASP.NET Core Web API / WPF desktop app / console app / Blazor Server]
+
+## Database and naming convention
+Database: [SQL Server / PostgreSQL / SQLite]
+Naming convention: [PascalCase (default) / snake_case / pluralized]
+
+## Audit and soft delete
+[Choose one:
+  - Full audit and soft delete: .WithFullAudit()
+  - Soft delete only: .WithSoftDelete()
+  - Audit only: .WithAuditFields()
+  - Neither — no ICurrentUserService needed
+]
 
 ## Domain entities
-[DOMAIN_ENTITIES]
+[Describe your entities, their relationships, and which implement IAuditable / ISoftDelete.
+Be explicit about required vs optional relationships.
 
-## Behaviour
-Audit stamping (IAuditable): [AUDITABLE_ENTITIES]
-Soft delete (ISoftDelete): [SOFT_DELETE_ENTITIES]
+Example:
+  Property : IEntity, IAuditable, ISoftDelete
+    - has one Address (required — non-nullable)
+    - has many Units
 
-## Identity
-Current user resolved from: [IDENTITY_SOURCE]
+  Unit : IEntity, IAuditable
+    - belongs to Property (required — non-nullable)
+    - has many Leases
 
-## Services required
-[SERVICES]
+  Tenant : IEntity, IAuditable
+    - has one Address (required — non-nullable)
+    - has many Leases
 
-## DI registration
-Using: [DI_FRAMEWORK]
+  Lease : IEntity, IAuditable, ISoftDelete
+    - belongs to Unit (required — non-nullable)
+    - belongs to Tenant (required — non-nullable)
+    - StartDate, EndDate, MonthlyRent [Precision(18,2)]
+]
 
-## Testing
-[TESTING_APPROACH]
+## ICurrentUserService
+[How your application resolves the current user. Examples:
+  - ASP.NET Core web app: IHttpContextAccessor
+  - JWT Bearer token: Claims principal, NameIdentifier claim
+  - WPF / WinForms: Windows authentication
+  - Background job / console: always "system"
+  - No audit stamping: omit entirely
+]
 
-## Additional requirements
-[ADDITIONAL_REQUIREMENTS]
+## Services needed
+[List your services and their key operations. Example:
+  IPropertyService — GetProperty, AddProperty, UpdateProperty, DeleteProperty, RestoreProperty
+  IUnitService — GetUnit, GetUnitsByProperty, AddUnit
+  ILeaseService — GetLease, GetLeasesByUnit, GetLeasesByTenant, AddLease, TerminateLease
+]
 
----
-
-Please generate the following files:
-
-1. **Domain entities** — C# classes implementing IEntity, IAuditable, and/or ISoftDelete 
-   as appropriate. Use nullable reference type annotations for required/optional FK 
-   relationships (non-nullable navigation = required, nullable navigation = optional). 
-   No scalar FK properties unless specifically needed. Collection navigation properties 
-   must use private set;
-
-2. **ICurrentUserService implementation** — appropriate for [IDENTITY_SOURCE].
-
-3. **UnitOfWork subclass** — concrete DbContext using the correct naming convention 
-   and WithFullAudit() / WithSoftDelete() / no audit as appropriate. Assembly anchor 
-   should be any domain entity type.
-
-4. **Application service interfaces and implementations** — one per service listed above, 
-   inheriting ServiceBase<TEntity> where appropriate. Use UnitOfWork.Query<T>() with 
-   explicit Include() calls. Guard optional FK navigations with null checks before 
-   accessing properties in LINQ expressions.
-
-5. **DI registration** — complete registration in [DI_FRAMEWORK] for ICurrentUserService, 
-   IUnitOfWork, and all application services.
-
-6. **[TESTING_APPROACH]** — test infrastructure (FixedUserService, InMemoryDb) and 
-   example tests covering add, soft delete, restore, and any business logic validation.
-
-Please follow these conventions throughout:
-- FK columns named after navigation property (Customer not CustomerId)
-- Collection properties use private set;
-- Audit properties: CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
-- Soft delete properties: IsDeleted, DeletedDate, DeletedBy
-- All async methods use CancellationToken ct = default
-- Services throw KeyNotFoundException when entity not found
-- Nullable reference types enabled (<Nullable>enable</Nullable>)
+## Please generate
+1. Domain entity classes following EFConventionBuilder v2.3 conventions
+2. ICurrentUserService implementation for my hosting environment
+3. Concrete UnitOfWork subclass
+4. Service interfaces and implementations inheriting ServiceBase<TEntity>
+5. DI registration
+6. Test infrastructure — FixedUserService and InMemoryDb with example tests
 ```
 
 ---
 
-## Example — filled in
+## Scenario 2 — Continuing development
 
-Here is a complete example using the Store domain from the EFConventionBuilder sample project:
+Use this when you have an existing EFConventionBuilder implementation and want the AI to help extend it — adding entities, services, features, or fixing issues.
 
 ```
-I am building an ASP.NET Core Web API using EFConventionBuilder — a convention-over-configuration 
-library for EF Core. Please scaffold a complete implementation for my project.
+I am continuing development on an existing EFConventionBuilder v2.3 implementation. 
+Using the documentation I provided, please help me with the following.
 
-## Database
-Target database: SQL Server
-Naming convention: PascalCase (default)
+## My current setup
+Naming convention: [PascalCase / snake_case]
+Builder configuration: [e.g. .ForAssemblyOf<Customer>().UseSnakeCase().WithFullAudit()]
+Database: [SQL Server / PostgreSQL]
+Project structure:
+  [YourApp].Domain    — entities
+  [YourApp].Data      — UnitOfWork subclass, ICurrentUserService implementation
+  [YourApp].Services  — application services
+  [YourApp].Tests     — xUnit tests
 
-## Domain entities
-Address — a physical mailing address
-  - plain entity, no audit, no soft delete
+## Existing entities (brief summary)
+[List your current entities and key relationships. Example:
+  Customer : IEntity, IAuditable — has one Address, has many Orders
+  Order : IEntity, IAuditable, ISoftDelete — belongs to Customer, has many OrderItems
+  Product : IEntity, IAuditable, ISoftDelete — belongs to Category
+]
 
-Category — a product category
-  - plain entity
-  - has many Products
-
-Customer — a store customer
-  - has one Address (required)
-  - has many Orders
-  - has many ProductReviews (optional FK back to Customer)
-  - IAuditable, hard delete
-
-Product — a store product
-  - has one Category (required)
-  - has many OrderItems
-  - Price and CostPrice use [Precision(18,2)]
-  - IAuditable + ISoftDelete
-
-Order — a customer order
-  - belongs to Customer (required)
-  - has many OrderItems
-  - TotalAmount uses [Precision(18,2)]
-  - IAuditable + ISoftDelete
-
-OrderItem — a line item within an Order
-  - belongs to Order (required)
-  - belongs to Product (required)
-  - UnitPrice uses [Precision(18,2)]
-  - plain entity
-
-ProductReview — a customer review for a product
-  - belongs to Product (required)
-  - belongs to Customer (optional — review survives customer deletion)
-  - IAuditable
-
-## Behaviour
-Audit stamping: Customer, Product, Order, ProductReview
-Soft delete: Product, Order
-
-## Identity
-Current user resolved from: ASP.NET Core HTTP context claims principal
-
-## Services required
-ICustomerService — GetCustomer, AddCustomer, UpdateCustomer, DeleteCustomer
-IProductService — GetProduct, SearchProducts, AddProduct, DeleteProduct, RestoreProduct
-IOrderService — GetOrder, GetOrdersByCustomer, PlaceOrder, DeleteOrder, RestoreOrder, PurgeOrder
-IProductReviewService — GetReviewsForProduct, GetReviewsByCustomer, AddReview, DeleteReview
-
-## DI registration
-Using: ASP.NET Core built-in DI (IServiceCollection) in Program.cs
-
-## Testing
-Both unit tests with Moq and integration tests with EF Core in-memory provider
-
-## Additional requirements
-None
+## What I need
+[Be specific about what you want to add or change. Examples:
+  - "Add a Supplier entity with a required Address FK and a one-to-many 
+    relationship with Product. Supplier needs IAuditable and ISoftDelete."
+  - "Add ISupplierService with GetSupplier, AddSupplier, DeleteSupplier, 
+    RestoreSupplier, and GetProductsBySupplier."
+  - "Add unit and integration tests for SupplierService covering add, 
+    soft delete, restore, and purge."
+  - "Add a GetOrdersByDateRangeAsync method to IOrderService that filters 
+    by OrderDate and includes Customer and Items."
+]
 ```
+
+---
+
+## Scenario 3 — Porting an existing EF Core project
+
+Use this when you have an existing EF Core application — whether using EF6, EF Core with explicit `OnModelCreating` configuration, or a repository pattern — and you want to migrate it to EFConventionBuilder.
+
+Porting is not a rewrite. The goal is incremental migration — adopt the conventions gradually without breaking your existing application.
+
+```
+I have an existing EF Core application that I want to migrate to EFConventionBuilder v2.3.
+Using the documentation I provided, please help me plan and execute this migration.
+
+## My current setup
+EF version: [EF6 / EF Core X.X]
+Current pattern: [explicit OnModelCreating / repository pattern / DbContext directly / other]
+Database: [SQL Server / PostgreSQL]
+Existing naming: [snake_case / PascalCase / mixed / legacy column names]
+Scalar FK properties: [yes — CustomerId, AddressId etc. / no]
+Existing audit: [manual in services / none / different column names]
+Existing soft delete: [IsDeleted column / archive table / none]
+
+## My existing domain (paste your current entities)
+[Paste your actual entity classes here — the AI needs to see the exact 
+property names, types, relationships, and any Data Annotations]
+
+## My existing DbContext (paste OnModelCreating)
+[Paste your current DbContext or repository configuration so the AI can 
+see what explicit mappings exist and what the conventions need to replace]
+
+## Migration goals
+[What do you want to achieve? Examples:
+  - "Adopt EFConventionBuilder conventions for all new entities going forward, 
+    leave existing entities unchanged for now"
+  - "Migrate all entities to remove scalar FK properties and use nullable 
+    reference type convention"
+  - "Add IAuditable and ISoftDelete to existing entities without changing 
+    the database schema — use column name overrides to match existing columns"
+  - "Replace our existing Repository<T> pattern with IUnitOfWork and ServiceBase"
+  - "Full migration — adopt all EFConventionBuilder conventions and update 
+    the database schema"
+]
+
+## Schema constraints
+[Are there existing column names you must keep? Examples:
+  - "Audit columns are currently named created_date and modified_date — 
+    these match EFConventionBuilder defaults, no override needed"
+  - "Audit columns are named RecordCreatedDate and RecordCreatedBy — 
+    I need to override the defaults"
+  - "FK columns are currently named customer_id — I need to keep them 
+    for now and migrate to the navigation name convention later"
+  - "No schema constraints — I can run a migration to update column names"
+]
+
+## Please help me with
+[Choose what you need:
+  - Migration plan — step by step approach for incremental adoption
+  - Updated entity classes — refactored to EFConventionBuilder conventions
+  - UnitOfWork subclass — replacing the existing DbContext configuration
+  - Column name overrides — keeping legacy column names during transition
+  - ServiceBase migration — replacing existing repository/service pattern
+  - Test infrastructure — FixedUserService and InMemoryDb for the migrated code
+]
+```
+
+### Porting tips
+
+**Start with new entities** — adopt EFConventionBuilder conventions on all new entities from day one. Leave existing entities as-is initially. This gives you immediate value without risk.
+
+**Use column name overrides for legacy schemas** — if your existing database has audit columns named `created_at` and `modified_at`, override the defaults rather than running a schema migration:
+
+```csharp
+.WithAuditFields(cols =>
+{
+    cols.CreatedDate  = "created_at";   // keep existing column name
+    cols.ModifiedDate = "modified_at";
+})
+```
+
+**Keep scalar FK properties during transition** — removing `CustomerId` from every entity at once is risky. Keep them while migrating — they're optional in v2.3 but still fully supported. Remove them gradually once the migration is stable.
+
+**Migrate OnModelCreating incrementally** — move one entity's configuration to conventions at a time. Verify with tests after each entity. Don't attempt a big-bang migration.
+
+**Run tests after every entity** — EFConventionBuilder's startup validation catches most configuration errors immediately. If something breaks the error message tells you exactly what and where.
 
 ---
 
 ## Tips for better results
 
-**Be specific about relationships** — "has many Orders" is good, "has many Orders (a customer can have zero or more orders, orders are soft-deleted)" is better. The more context you give, the more accurate the generated code will be.
+**Paste entity code directly** — instead of describing your entities in prose, paste the actual C# classes. The AI produces more accurate output when it can see exact property names, types, and nullability annotations.
 
-**List decimal properties explicitly** — mention which properties need `[Precision(18,2)]` — prices, amounts, rates etc. The AI will add the attribute automatically if you call it out.
+**One scenario at a time** — scaffold the domain first, review it, then ask for services. Smaller focused requests produce cleaner output.
 
-**Describe optional FKs clearly** — "ProductReview has an optional Customer (review survives customer deletion)" gives the AI the context to use `Customer?` (nullable) rather than `Customer` (required).
+**Reference the Wiki for specific topics** — if the AI produces code that doesn't match EFConventionBuilder conventions, point it to a specific page: "The FK column naming is wrong — read the [[Naming Conventions]] page and fix it."
 
-**Mention legacy schema constraints** — if you have an existing database with column names that differ from the defaults, describe them: "the audit columns are named RecordCreatedDate and RecordCreatedUser". The AI will generate the appropriate `WithAuditFields` override.
+**Iterate** — use the generated code as a starting point. Follow up with targeted requests: "Add a GetDeletedOrdersAsync method to IOrderService" or "Update OrderService to validate that all products are active before placing an order."
 
-**Iterate** — use the generated code as a starting point. Ask follow-up questions: "Add a GetDeletedProductsAsync method to IProductService" or "Update OrderService to validate that all products in an order are active before placing it".
+**For porting** — give the AI your actual existing code, not a description of it. The more context it has about what currently exists, the more accurate the migration plan will be.
